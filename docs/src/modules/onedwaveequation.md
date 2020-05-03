@@ -11,7 +11,8 @@ the wave speed, and ``\beta`` is a damping rate.
 
 ## Numerical formulation
 
-To solve the wave equation, we use a complexification of the first-order formulation of the 
+We derive a single complex wave equation that governs the evolution of the system.
+For this we start with the first-order formulation of the 
 wave equation,
 
 ```math
@@ -25,7 +26,8 @@ where ``\sigma \equiv c k`` for each Fourier wavenumber, leads to
 
 ```math
 \partial_t \left ( \sigma \hat \xi + \mathrm{i} \hat u \right ) = 
-    - \mathrm{i} \sigma \left ( \sigma \hat \xi + \mathrm{i} \hat u \right ) - \beta \hat u \, .
+    - \mathrm{i} \sigma \left ( \sigma \hat \xi + \mathrm{i} \hat u \right ) 
+    - \mathrm{i} \beta \hat u \, .
 ```
 
 We thus define the Fourier space "wave function"
@@ -50,4 +52,3 @@ The primitive variables ``\xi`` and ``u`` are recovered via
 \hat \xi = \frac{1}{2 \sigma}  \left ( \hat \varphi       + \hat \varphi^\star \right ) \\[2ex]
 \hat u = \frac{\mathrm{i}}{2} \left ( \hat \varphi^\star - \hat \varphi       \right )
 ```
-The resulting equation for ``\varphi`` is

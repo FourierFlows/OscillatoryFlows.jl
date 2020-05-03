@@ -73,7 +73,7 @@ end
 Returns a wave equation with damping beta, on grid.
 """
 function WaveEquation(c, grid)
-    L = @. im * σ(c, grid.k)^2
+    L = @. im * σ(c, grid.k)
     return FourierFlows.Equation(L, calcN!, grid)
 end
 
@@ -111,8 +111,8 @@ end
 Update `vars` on `grid` with the `sol`ution.
 """
 function updatevars!(vars, params, grid, sol)
-    @. vars.ξh = ( sol       + conj(sol) ) / (2 * σ(grid.k, params.c))
-    @. vars.uh = ( conj(sol) - sol       ) / 2
+    @. vars.ξh =      ( sol       + conj(sol) ) / (2 * σ(grid.k, params.c))
+    @. vars.uh = im * ( conj(sol) - sol       ) / 2
 
     @inbounds vars.ξh[1] = 0
 
@@ -132,10 +132,10 @@ updatevars!(prob) = updatevars!(prob.vars, prob.params, prob.grid, prob.sol)
 """
     set_u!(prob, u)
 
-Set the wave displacement as the transform of `u`.
+Set the wave velocity as the transform of `u`.
 """
 function set_u!(prob, u)
-    # Save ξ part:
+    # Ensure that ξ̂ is saved:
     updatevars!(prob)
 
     # Set the velocity field
@@ -152,10 +152,10 @@ end
 """
     set_ξ!(prob, ξ)
 
-Set the wave velocity as the transform of `u`.
+Set the wave displacement as the transform of `ξ`.
 """
 function set_ξ!(prob, ξ)
-    # Save ξ part:
+    # Ensure that û is saved:
     updatevars!(prob)
 
     # Set the displacement field
