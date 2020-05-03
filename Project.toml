@@ -1,0 +1,10 @@
+name = "OscillatoryFlows"
+uuid = "b30a42ed-5b83-40e3-a6f9-c071166b552b"
+authors = ["Gregory Wagner <wagner.greg@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+FourierFlows = "2aec4490-903f-5c70-9b11-9bed06a700e1"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
