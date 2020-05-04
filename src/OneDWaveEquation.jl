@@ -13,12 +13,13 @@ first-order formulation,
 
 in which the Fourier-space wave function, ``φ̂ = σ ξ̂ + im û`` for ``σ = c k``, obeys
 
-    ``∂t φ̂ + i σ φ̂ = - i β û``
+    ``∂t χ̂ - i σ χ̂ = - β/2 (ψ̂ + χ̂)``
+    ``∂t ψ̂ + i σ ψ̂ = - β/2 (ψ̂ + χ̂)``
 
 Note that 
 
-    `` û = im (  φ̂⋆ -  φ̂  ) / 2 ``
-    `` ξ̂ =    (  φ̂  +  φ̂⋆ ) / 2σ ``
+    `` û = (ψ̂ + χ̂) / 2``
+    `` ξ̂ = i (ψ̂ - χ̂) / 2 σ``
 """
 module OneDWaveEquation
 
@@ -73,7 +74,15 @@ end
 Returns a wave equation with damping beta, on grid.
 """
 function WaveEquation(c, grid)
-    L = @. im * σ(c, grid.k)
+    T = typeof(grid.Lx)
+    L = zeros(Complex{T}, grid.nkr, 2)
+
+    # χ
+    @. L[:, 1] = - im * σ(c, grid.kr)
+
+    # ψ
+    @. L[:, 2] =   im * σ(c, grid.kr)
+
     return FourierFlows.Equation(L, calcN!, grid)
 end
 
@@ -90,8 +99,8 @@ end
 Returns the vars for a one-dimensional wave equation problem problem on `grid`.
 """
 function Vars(::Dev, grid::AbstractGrid{T}) where {Dev, T}
-    @devzeros Dev Complex{T} grid.nx ξ u
-    @devzeros Dev Complex{T} grid.nk ξh uh
+    @devzeros Dev T grid.nx ξ u
+    @devzeros Dev Complex{T} grid.nkr ξh uh
     return Vars(ξ, u, ξh, uh)
 end
 
@@ -101,7 +110,8 @@ end
 Calculate the nonlinear term for the 1D wave equation.
 """
 function calcN!(N, sol, t, clock, vars, params, grid)
-    @. N = params.beta / 2 * (conj(sol) - sol)
+    @. N[:, 1] = - params.beta / 2 * (sol[:, 1] + sol[:, 2])
+    @. N[:, 2] = - params.beta / 2 * (sol[:, 1] + sol[:, 2])
     return nothing
 end
 
@@ -111,13 +121,13 @@ end
 Update `vars` on `grid` with the `sol`ution.
 """
 function updatevars!(vars, params, grid, sol)
-    @. vars.ξh =      ( sol       + conj(sol) ) / (2 * σ(grid.k, params.c))
-    @. vars.uh = im * ( conj(sol) - sol       ) / 2
+    @. vars.uh = (sol[:, 2] + sol[:, 1]) / 2
+    @. vars.ξh = (sol[:, 2] - sol[:, 1]) * im / (2 * σ(params.c, grid.kr))
 
     @inbounds vars.ξh[1] = 0
 
-    ldiv!(vars.ξ, grid.fftplan, vars.ξh)
-    ldiv!(vars.u, grid.fftplan, vars.uh)
+    ldiv!(vars.ξ, grid.rfftplan, vars.ξh)
+    ldiv!(vars.u, grid.rfftplan, vars.uh)
 
     return nothing
 end
@@ -140,11 +150,11 @@ function set_u!(prob, u)
 
     # Set the velocity field
     prob.vars.u .= u
-    mul!(prob.vars.uh, prob.grid.fftplan, prob.vars.u)
+    mul!(prob.vars.uh, prob.grid.rfftplan, prob.vars.u)
 
     # Set velocity u, and restore displacement ξ
-    @. prob.sol = im * prob.vars.uh
-    @. prob.sol += σ(prob.params.c, prob.grid.k) * prob.vars.ξh
+    @. prob.sol[:, 1] = prob.vars.uh + im * σ(prob.params.c, prob.grid.kr) * prob.vars.ξh
+    @. prob.sol[:, 2] = prob.vars.uh - im * σ(prob.params.c, prob.grid.kr) * prob.vars.ξh
 
     return nothing
 end
@@ -155,16 +165,16 @@ end
 Set the wave displacement as the transform of `ξ`.
 """
 function set_ξ!(prob, ξ)
-    # Ensure that û is saved:
+    # Ensure that ξ̂ is saved:
     updatevars!(prob)
 
-    # Set the displacement field
+    # Set the velocity field
     prob.vars.ξ .= ξ
-    mul!(prob.vars.ξh, prob.grid.fftplan, prob.vars.ξ)
+    mul!(prob.vars.ξh, prob.grid.rfftplan, prob.vars.ξ)
 
-    # Set displacement and restore velocity
-    @. prob.sol = im * prob.vars.uh
-    @. prob.sol += σ(prob.params.c, prob.grid.k) * prob.vars.ξh
+    # Set velocity u, and restore displacement ξ
+    @. prob.sol[:, 1] = prob.vars.uh + im * σ(prob.params.c, prob.grid.kr) * prob.vars.ξh
+    @. prob.sol[:, 2] = prob.vars.uh - im * σ(prob.params.c, prob.grid.kr) * prob.vars.ξh
 
     return nothing
 end

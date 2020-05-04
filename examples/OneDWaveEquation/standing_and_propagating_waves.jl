@@ -17,8 +17,10 @@ dt = 0.01
 propagating_wave_problem = Problem(; nx=nx, Lx=Lx, c=c, beta=0, dt=dt)
 
 k = 8
+# ξ(x) = cos(k * x - k * c * t)
+# u(x) = k * c * sin(k * x - k * c * t)
 ξ₀(x) = cos(k * x)
-u₀(x) = c * k * sin(k * x)
+u₀(x) = k * c * sin(k * x)
 
 # # Standing wave initial condition
 
