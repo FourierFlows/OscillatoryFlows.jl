@@ -1,4 +1,4 @@
-push!(LOAD_PATH, "..")
+push!(LOAD_PATH,"../src/")
 
 using
     Documenter,
@@ -11,13 +11,18 @@ using
 #####
 
 const EXAMPLES_DIR = joinpath(@__DIR__, "..", "examples")
-const OUTPUT_DIR   = joinpath(@__DIR__, "src/examples")
+const OUTPUT_DIR   = joinpath(@__DIR__, "src/generated")
 
-examples = []
+examples = [
+    "OneDWaveEquation/standing_and_propagating_waves.jl",
+    "OneDWaveEquation/two_gaussians.jl",
+]
+
 
 for example in examples
   example_filepath = joinpath(EXAMPLES_DIR, example)
   Literate.markdown(example_filepath, OUTPUT_DIR, documenter=true)
+  Literate.notebook(example_filepath, OUTPUT_DIR, documenter=true)
 end
 
 
@@ -30,7 +35,7 @@ end
 Timer(t -> println(" "), 0, interval=240)
 
 format = Documenter.HTML(
-  collapselevel = 1,
+  collapselevel = 2,
      prettyurls = get(ENV, "CI", nothing) == "true",
       canonical = "https://fourierflows.github.io/OscillatoryFlows.jl/dev/"
 )
@@ -48,7 +53,12 @@ makedocs(  modules = [OscillatoryFlows],
                          "Modules" => Any[
                                           "modules/onedwaveequation.md",
                                          ],
-                         "Examples" => [],
+                         "Examples" => [
+                         "OneDWaveEquation" => Any[
+                             "generated/standing_and_propagating_waves.md",
+                             "generated/two_gaussians.md"
+                             ]
+                         ],
                         ]
         )
 
