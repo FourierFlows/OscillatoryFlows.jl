@@ -5,13 +5,12 @@ Solve the one dimensional wave equation with damping:
 
     ``∂t² ξ - c² ∂x² ξ = - β ∂t ξ``
 
-To solve the problem, we use a complexified form of the Fourier transform of the
-first-order formulation,
+To solve the problem, we 'diagonalize' dispersion by introducing
 
-    ``∂t ξ = u``
-    ``∂t u = c² ∂x² ξ - β u``
+    ``χ = u + c ∂x ξ``
+    ``ψ = u - c ∂x ξ``
 
-in which the Fourier-space wave function, ``φ̂ = σ ξ̂ + im û`` for ``σ = c k``, obeys
+In terms of these 'wave functions', the Fourier transform of the wave equation becomes
 
     ``∂t χ̂ - i σ χ̂ = - β/2 (ψ̂ + χ̂)``
     ``∂t ψ̂ + i σ ψ̂ = - β/2 (ψ̂ + χ̂)``
@@ -78,10 +77,10 @@ function WaveEquation(c, grid)
     L = zeros(Complex{T}, grid.nkr, 2)
 
     # χ
-    @. L[:, 1] = - im * σ(c, grid.kr)
+    @. L[:, 1] =   im * σ(c, grid.kr)
 
     # ψ
-    @. L[:, 2] =   im * σ(c, grid.kr)
+    @. L[:, 2] = - im * σ(c, grid.kr)
 
     return FourierFlows.Equation(L, calcN!, grid)
 end
