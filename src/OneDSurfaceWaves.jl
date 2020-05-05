@@ -103,14 +103,21 @@ end
 
 ∂z_Ψ(m, h, k) = isodd(m) ? k^m * tanh(k * h) : k^m
 
-function set_surface_ϕz!(∂ᵐz_ϕ, m, ϕz, s, grid) 
-    @. ∂ᵐz_ϕ = 0
+"""
+    set_surface_ϕz!(ϕzm, m, ϕz, s, grid) 
+
+Computes the value of the mᵗʰ component of ϕz at the surface
+using previously computed lower order vertical derivatives contained in ϕz,
+according to the Taylor expansion developed in Dommermuth and Yue, 1987.
+"""
+function set_surface_ϕz!(ϕzm, m, ϕz, s, grid)
+    @. ϕzm = 0
 
     for n = (m-1) : -1 : 1
-        @. ∂ᵐz_ϕ.g += s^n * ϕz[n] / factorial(n)
+        @. ϕzm.g += s^n * ϕz[n] / factorial(n)
     end
 
-    mul!(∂ᵐz_ϕ.c, grid.rfftplan, ∂ᵐz_ϕ.g)
+    mul!(ϕzm.c, grid.rfftplan, ϕzm.g)
 
     return nothing
 end
@@ -185,10 +192,16 @@ end
 Calculate the nonlinear term for the 1D wave equation.
 """
 function calcN!(N, sol, t, clock, vars, params, grid)
-    @views ldiv!(vars.Φ, grid.rfftplan, sol[:, 1])
-    @views ldiv!(vars.s, grid.rfftplan, sol[:, 2])
+    ŝ = view(sol, :, 1)
+    Φ̂ = view(sol, :, 2)
 
-    compute_ϕz!(vars.ϕz, vars.ϕzm, sol[:, 1], vars.s, params, grid)
+    Ns = view(N, :, 1)
+    NΦ = view(N, :, 2)
+
+    ldiv!(vars.Φ, grid.rfftplan, ŝ)
+    ldiv!(vars.s, grid.rfftplan, Φ̂)
+
+    compute_ϕz!(vars.ϕz, vars.ϕzm, ŝ, vars.s, params, grid)
 
     ######
     ###### Calculate RHS for s
@@ -196,23 +209,23 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     
     # Calculate Φₓ sₓ
     Φ̂ₓ = vars.aux_coeffs
-    @views @. Φ̂ₓ = im * grid.kr * sol[:, 1]
+    @views @. Φ̂ₓ = im * grid.kr * ŝ
     ldiv!(vars.Φₓ, grid.rfftplan, Φ̂ₓ)
 
     ŝₓ = vars.aux_coeffs
-    @views @. ŝₓ = im * grid.kr * sol[:, 2]
+    @views @. ŝₓ = im * grid.kr * Φ̂
     ldiv!(vars.sₓ, grid.rfftplan, ŝₓ)
 
     @. vars.aux_grid = vars.Φₓ * vars.sₓ
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
-    @views @. N[:, 2] = - vars.aux_coeffs
+    @. Ns = - vars.aux_coeffs
 
     # Calculate (1 + sₓ²) ϕz
     @. vars.aux_grid = (1 + vars.sₓ^2) * ϕz
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
-    @views @. N[:, 2] += vars.aux_coeffs
+    @. Ns += vars.aux_coeffs
 
     ######
     ###### Calculate RHS for Φ
@@ -223,22 +236,22 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
     # Add -(1 + sₓ²) ϕz²
-    @views @. N[:, 1] = vars.aux_coeffs / 2
+    @. NΦ = vars.aux_coeffs / 2
 
     # Add - g ŝ
-    @views @. N[:, 1] = - params.g * sol[:, 2]
+    @. NΦ = - params.g * ŝ
 
     # Calculate Φₓ²
     @. vars.aux_grid = vars.Φₓ^2
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
     # Add transform of -Φₓ² / 2
-    @views @. N[:, 1] = - vars.aux_coeffs / 2
+    @. NΦ = - vars.aux_coeffs / 2
 
     # Add forcing by ϖ
     vars.ϖ .= params.ϖ.(grid.x, t)
     mul!(vars.ϖ̂, grid.rfftplan, vars.ϖ)
-    @views @. N[:, 1] = - vars.ϖ̂
+    @. NΦ = - vars.ϖ̂
 
     return nothing
 end
@@ -249,10 +262,13 @@ end
 Update `vars` on `grid` with the `sol`ution.
 """
 function updatevars!(vars, params, grid, sol)
-    compute_ϕz!(vars.ϕz, vars.ϕzm, sol[:, 1], vars.s, params, grid)
+    ŝ = view(sol, :, 1)
+    Φ̂ = view(sol, :, 2)
 
-    @views ldiv!(vars.Φ, grid.rfftplan, sol[:, 1])
-    @views ldiv!(vars.s, grid.rfftplan, sol[:, 2])
+    compute_ϕz!(vars.ϕz, vars.ϕzm, ŝ, vars.s, params, grid)
+
+    @views ldiv!(vars.Φ, grid.rfftplan, ŝ)
+    @views ldiv!(vars.s, grid.rfftplan, Φ̂)
 
     return nothing
 end
@@ -270,9 +286,11 @@ updatevars!(prob) = updatevars!(prob.vars, prob.params, prob.grid, prob.sol)
 Set the surface displacement `s`.
 """
 function set_s!(prob, s)
+    ŝ = view(sol, :, 1)
+    Φ̂ = view(sol, :, 2)
 
     prob.vars.s .= s
-    @views mul!(prob.sol[:, 2], prob.grid.rfftplan, prob.vars.s)
+    @views mul!(ŝ, prob.grid.rfftplan, prob.vars.s)
 
     updatevars!(prob)
 
@@ -285,9 +303,11 @@ end
 Set the surface potential `Φ`.
 """
 function set_Φ!(prob, Φ)
+    ŝ = view(sol, :, 1)
+    Φ̂ = view(sol, :, 2)
 
     prob.vars.Φ .= Φ
-    @views mul!(prob.sol[:, 1], prob.grid.rfftplan, prob.vars.Φ)
+    @views mul!(Φ̂, prob.grid.rfftplan, prob.vars.Φ)
 
     return nothing
 end
