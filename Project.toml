@@ -1,6 +1,6 @@
 name = "OscillatoryFlows"
 uuid = "b30a42ed-5b83-40e3-a6f9-c071166b552b"
-authors = ["Gregory Wagner <wagner.greg@gmail.com>"]
+authors = ["Gregory Wagner <wagner.greg@gmail.com>" and "Navid C. Constantinou <navidcy@gmail.com>"]
 version = "0.1.0"
 
 [deps]
