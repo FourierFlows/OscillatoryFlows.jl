@@ -35,7 +35,7 @@ function Problem(;
 
       grid = OneDGrid(CPU(), nx, Lx; T=T)
     params = Params(T, g=g, h=h)
-      vars = Vars(CPU(), grid, order)
+      vars = Vars(CPU(), order, grid)
        eqn = WaveEquation(grid)
 
     return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU())
@@ -49,7 +49,7 @@ end
 
 zerofunction(x, t) = 0
 
-Params(T=Float64; g=9.81, h=1, ϖ=zerofunction) = Params{T}(g, h, ϖ)
+Params(T=Float64; g=9.81, h=1, ϖ=zerofunction) = Params{T, typeof(ϖ)}(g, h, ϖ)
 
 """
     WaveEquation(beta, grid)
@@ -63,22 +63,22 @@ function WaveEquation(grid)
     return FourierFlows.Equation(L, calcN!, grid)
 end
 
-function PotentialPerturbationExpansion(T, order)
+function PotentialPerturbationExpansion(T, order, grid)
 
     ϕ̃z = []
 
     for m = 1:order
-        names = Tuple(Symbol("z"^μ) for μ = 1:(order-m))
+        names = Tuple(Symbol("z"^μ) for μ = 1:(order-m+1))
 
         fields = Tuple(
                        (c = zeros(Complex{T}, grid.nkr), g = zeros(T, grid.nx))
-                       for μ = 1:(order-m)
+                       for μ = 1:(order-m+1)
                       )
 
         push!(ϕ̃z, NamedTuple{names}(fields))
     end
 
-    return Tuple(ϕ̃z...)
+    return tuple(ϕ̃z...)
 end
 
 function inverse_transform!(ϕzm, grid, N=1:length(ϕzm))
@@ -111,13 +111,13 @@ using previously computed lower order vertical derivatives contained in ϕz,
 according to the Taylor expansion developed in Dommermuth and Yue, 1987.
 """
 function set_surface_ϕz!(ϕzm, m, ϕz, s, grid)
-    @. ϕzm = 0
+    @. ϕzm[1].g = 0
 
-    for n = (m-1) : -1 : 1
-        @. ϕzm.g += s^n * ϕz[n] / factorial(n)
+    for (i, n) = enumerate((m-1) : -1 : 1)
+        @. ϕzm[1].g += s^i * ϕz[n][i+1].g / factorial(i)
     end
 
-    mul!(ϕzm.c, grid.rfftplan, ϕzm.g)
+    mul!(ϕzm[1].c, grid.rfftplan, ϕzm[1].g)
 
     return nothing
 end
@@ -128,7 +128,7 @@ end
 Computes the vertical gradient of the potential ϕ using a perturbation
 expansion at the surface.
 """
-function compute_ϕz!(Σϕz, ϕzm, Φ̂, s, params, grid)
+function compute_ϕz!(Σϕz, ϕz, Φ̂, s, params, grid)
     M = length(ϕz)
     ϕz1 = ϕz[1]
 
@@ -151,7 +151,7 @@ function compute_ϕz!(Σϕz, ϕzm, Φ̂, s, params, grid)
 
     Σϕz .= 0
     for m = 1:M
-        @. Σϕz += ϕz[1]
+        @. Σϕz += ϕz[m].z.g
     end
 
     return nothing
@@ -181,7 +181,7 @@ function Vars(::Dev, order, grid::AbstractGrid{T}) where {Dev, T}
     @devzeros Dev T grid.nx s ϖ Φ Φₓ sₓ ϕz aux_grid
     @devzeros Dev Complex{T} grid.nkr ϖ̂ ŝ aux_coeffs
 
-    ϕzm = PotentialPerturbationExpansion(T, order)
+    ϕzm = PotentialPerturbationExpansion(T, order, grid)
 
     return Vars(ϕzm, Φ, s, ϖ, Φₓ, sₓ, ϕz, aux_grid, ϖ̂, ŝ, aux_coeffs)
 end
@@ -222,7 +222,7 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     @. Ns = - vars.aux_coeffs
 
     # Calculate (1 + sₓ²) ϕz
-    @. vars.aux_grid = (1 + vars.sₓ^2) * ϕz
+    @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
     @. Ns += vars.aux_coeffs
@@ -232,7 +232,7 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     ######
     
     # Calculate (1 + sₓ²) ϕz²
-    @. vars.aux_grid = (1 + vars.sₓ^2) * ϕz^2
+    @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz^2
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
     # Add -(1 + sₓ²) ϕz²
@@ -253,6 +253,8 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     mul!(vars.ϖ̂, grid.rfftplan, vars.ϖ)
     @. NΦ = - vars.ϖ̂
 
+    dealias!(Ns, grid)
+    dealias!(NΦ, grid)
     return nothing
 end
 
@@ -262,13 +264,10 @@ end
 Update `vars` on `grid` with the `sol`ution.
 """
 function updatevars!(vars, params, grid, sol)
-    ŝ = view(sol, :, 1)
-    Φ̂ = view(sol, :, 2)
+    compute_ϕz!(vars.ϕz, vars.ϕzm, sol[:, 1], vars.s, params, grid)
 
-    compute_ϕz!(vars.ϕz, vars.ϕzm, ŝ, vars.s, params, grid)
-
-    @views ldiv!(vars.Φ, grid.rfftplan, ŝ)
-    @views ldiv!(vars.s, grid.rfftplan, Φ̂)
+    ldiv!(vars.s, grid.rfftplan, sol[:, 1])
+    ldiv!(vars.Φ, grid.rfftplan, sol[:, 2])
 
     return nothing
 end
@@ -286,11 +285,8 @@ updatevars!(prob) = updatevars!(prob.vars, prob.params, prob.grid, prob.sol)
 Set the surface displacement `s`.
 """
 function set_s!(prob, s)
-    ŝ = view(sol, :, 1)
-    Φ̂ = view(sol, :, 2)
-
     prob.vars.s .= s
-    @views mul!(ŝ, prob.grid.rfftplan, prob.vars.s)
+    @views mul!(prob.sol[:, 1], prob.grid.rfftplan, prob.vars.s)
 
     updatevars!(prob)
 
@@ -303,16 +299,15 @@ end
 Set the surface potential `Φ`.
 """
 function set_Φ!(prob, Φ)
-    ŝ = view(sol, :, 1)
-    Φ̂ = view(sol, :, 2)
-
     prob.vars.Φ .= Φ
-    @views mul!(Φ̂, prob.grid.rfftplan, prob.vars.Φ)
+    @views mul!(sol[:, 2], prob.grid.rfftplan, prob.vars.Φ)
+
+    updatevars!(prob)
 
     return nothing
 end
 
-set_s!(prob, u::Function) = set_s!(prob, s.(prob.grid.x))
-set_Φ!(prob, ξ::Function) = set_Φ!(prob, Φ.(prob.grid.x))
+set_s!(prob, s::Function) = set_s!(prob, s.(prob.grid.x))
+set_Φ!(prob, Φ::Function) = set_Φ!(prob, Φ.(prob.grid.x))
 
 end # module

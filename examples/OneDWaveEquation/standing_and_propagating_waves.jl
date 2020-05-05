@@ -10,7 +10,7 @@ using
 
 Lx = 2π
 nx = 256
-c = 1
+ c = 1
 dt = 0.01
 
    standing_wave_problem = Problem(; nx=nx, Lx=Lx, c=c, beta=0, dt=dt)
@@ -35,6 +35,9 @@ close("all")
 fig, axs = subplots(nrows=2, sharey=true, sharex=true)
 
 function makeplot!(axs, standing_wave_problem, propagating_wave_problem)
+
+    updatevars!(standing_wave_problem)
+    updatevars!(propagating_wave_problem)
     
     sca(axs[1]); cla()
     plot(standing_wave_problem.grid.x, real.(standing_wave_problem.vars.ξ))
@@ -51,16 +54,11 @@ function makeplot!(axs, standing_wave_problem, propagating_wave_problem)
     return nothing
 end
 
-updatevars!(standing_wave_problem)
-updatevars!(propagating_wave_problem)
 makeplot!(axs, standing_wave_problem, propagating_wave_problem)
 
 for i = 1:100
     stepforward!(standing_wave_problem, 1)
     stepforward!(propagating_wave_problem, 1)
-
-    updatevars!(standing_wave_problem)
-    updatevars!(propagating_wave_problem)
 
     makeplot!(axs, standing_wave_problem, propagating_wave_problem)
 end
