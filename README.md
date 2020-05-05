@@ -7,8 +7,8 @@
     <!-- <a href="https://gitlab.com/JuliaGPU/OscillatoryFlows-jl/commits/master">
       <img alt="Build Status for GPU" src="https://img.shields.io/gitlab/pipeline/JuliaGPU/OscillatoryFlows-jl/master?label=GPU&logo=gitlab&logoColor=white&style=flat-square"> -->
     </a>
-    <a href="https://ci.appveyor.com/project/navidcy/oscillatorylows-jl">
-        <img alt="Build Status for Windows" src="https://img.shields.io/appveyor/ci/navidcy/oscillatorylows-jl/master?label=Window&logo=appveyor&logoColor=white&style=flat-square">
+    <a href="https://ci.appveyor.com/project/navidcy/oscillatoryflows-jl">
+        <img alt="Build Status for Windows" src="https://img.shields.io/appveyor/ci/navidcy/oscillatoryflows-jl/master?label=Window&logo=appveyor&logoColor=white&style=flat-square">
     </a>
     <a href="https://fourierflows.github.io/OscillatoryFlows.jl/stable/">
         <img src="https://img.shields.io/badge/docs-stable-blue.svg">
