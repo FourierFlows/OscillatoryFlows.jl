@@ -1,6 +1,7 @@
 # # Two Gaussians
 # 
-# In this example, a gaussian initial condition is let loose and two gaussians that propagate in either direction emerge.
+# In this example, a gaussian initial condition is let loose and two gaussians 
+# that propagate in either direction emerge.
 
 using
     OscillatoryFlows.OneDWaveEquation,

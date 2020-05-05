@@ -1,35 +1,42 @@
 # # Standing and propagating waves
 # 
-# In this examples, we illustrate the motion of both standing
-# and propagating waves using `OscillatoryFlows`' `OneDWaveEquation` module.
+# In this example, we illustrate the motion of both standing and propagating
+# waves using `OscillatoryFlows`' `OneDWaveEquation` module.
 
 using 
     OscillatoryFlows.OneDWaveEquation,
     Printf,
     PyPlot
 
-Lx = 2π
-nx = 256
- c = 1
-dt = 0.01
+# ## Parameters
 
+Lx = 2π     # domain length
+nx = 256    # number of grid points
+ c = 1      # wave phase speed
+dt = 0.01   # time-step
+
+# ## Setting up the problems
    standing_wave_problem = Problem(; nx=nx, Lx=Lx, c=c, beta=0, dt=dt)
 propagating_wave_problem = Problem(; nx=nx, Lx=Lx, c=c, beta=0, dt=dt)
 
-k = 8
+# ## Initial conditions
 # ξ(x) = cos(k * x - k * c * t)
 # u(x) = k * c * sin(k * x - k * c * t)
+k = 8
 ξ₀(x) = cos(k * x)
 u₀(x) = k * c * sin(k * x)
 
-# # Standing wave initial condition
+# ### Standing wave initial condition
 
 set_ξ!(standing_wave_problem, ξ₀)
 
-# # Propagating wave initial condition
+# ### Propagating wave initial condition
 
 set_ξ!(propagating_wave_problem, ξ₀)
 set_u!(propagating_wave_problem, u₀)
+
+
+# ## Visualization
 
 close("all")
 fig, axs = subplots(nrows=2, sharey=true, sharex=true)
@@ -55,6 +62,8 @@ function makeplot!(axs, standing_wave_problem, propagating_wave_problem)
 end
 
 makeplot!(axs, standing_wave_problem, propagating_wave_problem)
+
+# ## Time-step
 
 for i = 1:100
     stepforward!(standing_wave_problem, 1)
