@@ -36,7 +36,7 @@ function Problem(;
       grid = OneDGrid(CPU(), nx, Lx; T=T)
     params = Params(T, g=g, h=h)
       vars = Vars(CPU(), grid, order)
-       eqn = WaveEquation(c, grid)
+       eqn = WaveEquation(grid)
 
     return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU())
 end
@@ -56,7 +56,7 @@ Params(T=Float64; g=9.81, h=1, ϖ=zerofunction) = Params{T}(g, h, ϖ)
 
 Returns a wave equation with damping beta, on grid.
 """
-function WaveEquation(c, grid)
+function WaveEquation(grid)
     T = typeof(grid.Lx)
     L = zeros(Complex{T}, grid.nkr, 2)
 
