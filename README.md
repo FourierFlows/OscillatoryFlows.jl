@@ -10,9 +10,9 @@
     <a href="https://ci.appveyor.com/project/navidcy/oscillatoryflows-jl">
         <img alt="Build Status for Windows" src="https://img.shields.io/appveyor/ci/navidcy/oscillatoryflows-jl/master?label=Window&logo=appveyor&logoColor=white&style=flat-square">
     </a>
-    <a href="https://fourierflows.github.io/OscillatoryFlows.jl/stable/">
+    <!-- <a href="https://fourierflows.github.io/OscillatoryFlows.jl/stable/">
         <img src="https://img.shields.io/badge/docs-stable-blue.svg">
-    </a>
+    </a> -->
     <a href="https://fourierflows.github.io/OscillatoryFlows.jl/dev/">
         <img src="https://img.shields.io/badge/docs-dev-blue.svg">
     </a>

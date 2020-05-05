@@ -10,4 +10,4 @@ solve various wave equations that occur in fluid dynamics and other disciplines.
 
 ## Developers
 
-GeophysicalFlows is currently being developed by [Gregory L. Wagner](https://glwagner.github.io) and [Navid C. Constantinou](http://www.navidconstantinou.com).
+OscillatoryFlows is currently being developed by [Gregory L. Wagner](https://glwagner.github.io) and [Navid C. Constantinou](http://www.navidconstantinou.com).
