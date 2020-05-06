@@ -1,4 +1,4 @@
-# OneDWaveEquation Module
+# OneDWaveEquation
 
 This module solves the one-dimensional wave equation:
 

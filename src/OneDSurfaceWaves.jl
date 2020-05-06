@@ -58,69 +58,155 @@ Returns a wave equation with damping beta, on grid.
 """
 function WaveEquation(grid)
     T = typeof(grid.Lx)
+
+    # The term linear in s is L[:, 1]
+    # The term linear in Φ is L[:, 2]
     L = zeros(Complex{T}, grid.nkr, 2)
 
     return FourierFlows.Equation(L, calcN!, grid)
 end
 
+"""
+    PotentialPerturbationExpansion(T, order, grid)
+
+Returns a Tuple of NamedTuples corresponding to 
+grid values and Fourier coefficients of the velocity potential
+evaluated at the surface on the one-dimensional `grid` in `x`.
+The elements of the tuple are the terms in a perturbation expansion
+of the velocity potential (and its derivatives) to `order`.
+`T` is the floating point type of the arrays.
+
+The members of the tuple are indexed by their order.
+In other words, `ϕz[1]` and `ϕz[2]` are the O(ϵ¹) and O(ϵ²)
+terms in the expansion of `ϕz`.
+
+Each term in the expansion is a `NamedTuple`. The fields of the NamedTuple
+are the vertical dervatives of the velocity potential.
+For example,
+
+    * `ϕ[1].o = ϕ[1][1]` is `ϕ₁`.
+    * `ϕ[1].z = ϕ[1][2]` is the first z-derivative of `ϕ₁`
+    * `ϕ[2].zzz` is the third z-derivative of `ϕ₂`
+
+Each derivative contains both Fourier-space 'coefficients' and grid-space
+arrays. Thus
+
+    * `ϕ[3].zz.g` returns an array with grid space values for the
+       second z-derivative of `ϕ₃`.
+
+    * `ϕ[7].zzzz.c` returns a (complex) array with Fourier coefficients
+       for the fourth z-derivative of `ϕ₇`.
+
+There are `order` elements in the return tuple `ϕ`.
+Each element `ϕ[m]` has `(order-m+1) elements.
+Summary of the nested structure of `ϕ`:
+
+    * `ϕ`: `Tuple` of `NamedTuple`s
+    * `ϕ[m]`: `NamedTuple` of vertical derivatives
+    * `ϕ[m].o`: `NamedTuple` of Fourier coefficients and grid-space values.
+    * `ϕ[m].z`: `NamedTuple` of Fourier coefficients and grid-space values.
+    * `ϕ[m].z.c`: Fourier coefficient array
+    * `ϕ[m].z.g`: Grid space array
+
+"""
 function PotentialPerturbationExpansion(T, order, grid)
 
-    ϕ̃z = []
+    ϕ̃ = []
 
     for m = 1:order
-        names = Tuple(Symbol("z"^μ) for μ = 1:(order-m+1))
+        derivative_names = [Symbol("z"^μ) for μ = 1:(order-m+1)]
+        names = (:s, derivative_names...)
 
         fields = Tuple(
                        (c = zeros(Complex{T}, grid.nkr), g = zeros(T, grid.nx))
-                       for μ = 1:(order-m+1)
+                       for μ = 1:(order-m+2)
                       )
 
-        push!(ϕ̃z, NamedTuple{names}(fields))
+        push!(ϕ̃, NamedTuple{names}(fields))
     end
 
-    return tuple(ϕ̃z...)
+    # Convert from abstractly-typed array to concretely-typed tuple
+    return tuple(ϕ̃...)
 end
 
-function inverse_transform!(ϕzm, grid, N=1:length(ϕzm))
+"""
+    inverse_transform!(ϕm, grid, N=1:length(ϕm))
+
+Perform an inverse Fourier transform of the `N` fields
+in `ϕm`, the O(ϵᵐ) term in a perturbation expansion of the
+velocity potential.
+"""
+function inverse_transform!(ϕm, grid, N=1:length(ϕm))
 
     for n in N
-        ∂ⁿz_ϕ = ϕzm[n]
+        ∂ⁿz_ϕ = ϕm[n]
         ldiv!(∂ⁿz_ϕ.g, grid.rfftplan, ∂ⁿz_ϕ.c)
     end
 
     return nothing
 end
 
-function forward_transform!(ϕzm, grid, N=1:length(ϕzm))
+"""
+    forward_transform!(ϕm, grid, N=1:length(ϕm))
+
+Perform a forward Fourier transform of the `N` fields
+in `ϕm`, the O(ϵᵐ) term in a perturbation expansion of the
+velocity potential.
+"""
+function forward_transform!(ϕm, grid, N=1:length(ϕm))
 
     for n in N
-        ∂ⁿz_ϕ = ϕzm[n]
+        ∂ⁿz_ϕ = ϕm[n]
         mul!(∂ⁿz_ϕ.c, grid.rfftplan, ∂ⁿz_ϕ.g)
     end
 
     return nothing
 end
 
-∂z_Ψ(m, h, k) = isodd(m) ? k^m * tanh(k * h) : k^m
-
 """
-    set_surface_ϕz!(ϕzm, m, ϕz, s, grid) 
+    set_surface_ϕm!(ϕm, m, ϕz, s, grid) 
 
 Computes the value of the mᵗʰ component of ϕz at the surface
 using previously computed lower order vertical derivatives contained in ϕz,
 according to the Taylor expansion developed in Dommermuth and Yue, 1987.
+
+For `m = 2:4`, this does
+
+    `ϕ₂ = - s * ϕ₁.z`    
+    `ϕ₃ = - s * ϕ₂.z - s^2 / 2 * ϕ₁.zz`    
+    `ϕ₄ = - s * ϕ₃.z - s^2 / 2 * ϕ₂.zz - s^3 / 6 * ϕ₁.zzz`    
+
+This function should not be called for `m = 1`.
 """
-function set_surface_ϕz!(ϕzm, m, ϕz, s, grid)
-    @. ϕzm[1].g = 0
+function set_surface_ϕm!(ϕ, m, s, grid)
+    ϕm = ϕ[m][1]
+    @. ϕm.g = 0
 
     for (i, n) = enumerate((m-1) : -1 : 1)
-        @. ϕzm[1].g += s^i * ϕz[n][i+1].g / factorial(i)
+        @. ϕm.g -= s^i * ϕ[n][i+1].g / factorial(i)
     end
-
-    mul!(ϕzm[1].c, grid.rfftplan, ϕzm[1].g)
 
     return nothing
 end
+
+"""
+    ∂z_Ψ(m, h, k)
+
+Compute the `m`ᵗʰ vertical derivative of the solution to
+Laplace's equation in Fourier-space evaluated at `z=0`,
+in a domain with depth `h` and with Fourier wavenumber `k`.
+
+The mode is
+
+    ``Ψ(z) = cosh(k * (z + h)) / cosh(k * h)``
+
+The vertical derivatives at ``z=0`` are therefore
+
+    *   `Ψz = k * tanh(k * h)`
+    *  `Ψzz = k^2`
+    * `Ψzzz = k^3 * tanh(k * h)`
+"""
+∂z_Ψ(m, h, k) = isodd(m) ? k^m * tanh(k * h) : k^m
 
 """
     compute_ϕz!(Σϕz, ϕzm, Φ̂, s, params, grid)
@@ -128,37 +214,91 @@ end
 Computes the vertical gradient of the potential ϕ using a perturbation
 expansion at the surface.
 """
-function compute_ϕz!(Σϕz, ϕz, Φ̂, s, params, grid)
-    M = length(ϕz)
-    ϕz1 = ϕz[1]
+function compute_ϕz!(Σϕz, ϕ, Φ̂, s, params, grid)
+    @inbounds begin
 
-    for n = 1:M
-        @. ϕz1[n].c = Φ̂ * ∂z_Ψ(n, params.h, grid.kr)
-    end
+        M = length(ϕz) # order of expansion
+        ϕ₁ = ϕ[1] # Leading-order ϕ
 
-    inverse_transform!(ϕz1, grid)
+        # Set ϕ₁ at the surface
+        @. ϕ₁[1].c = Φ̂
 
-    for m = 2:M
-        ϕzm = ϕz[m]
-        set_surface_ϕz!(ϕzm, m, ϕz, s, grid)
-
-        for n = 2:(M-m)
-            @. ϕzm[n].c = ϕzm[1].c / ∂z_Ψ(1, params.h, grid.kr) * ∂z_Ψ(m, params.h, grid.kr)
+        # Obtain the first n derivatives of ϕ₁ in grid space
+        for n = 1:M
+            @. ϕ₁[n+1].c = Φ̂ * ∂z_Ψ(n, params.h, grid.kr)
         end
 
-        inverse_transform!(ϕzm, grid, 2:(M-m))
+        inverse_transform!(ϕ₁, grid)
+
+        # Obtain ϕm ~ O(ϵᵐ) for m = 2, ..., M
+        for m = 2:M
+            # Set ϕ[m][1].g, the surface grid values of ϕ[m]
+            set_surface_ϕm!(ϕ, m, s, grid)
+
+            # Convenient alias
+            ϕm = ϕ[m]
+
+            # Transform ϕm[1] to Fourier space
+            mul!(ϕm[1].c, grid.rfftplan, ϕm[1].g)
+
+            # Determine z-derivatives from ϕm[1].c
+            for n = 2:length(ϕm)+1
+                @. ϕm[n].c = ϕm[1].c * ∂z_Ψ(n, params.h, grid.kr)
+            end
+
+            # Transform the just-calculated z-derivative of ϕzm 
+            # from coefficient space to grid space.
+            inverse_transform!(ϕzm, grid, 2:length(ϕzm))
+        end
     end
 
+    # Given ϕ (and derivatives) at z=0, use a Taylor expansion 
+    # to determine ϕz at z=s.
+    surface_ϕz_from_expansion!(Σϕz, ϕ, s) 
+
+    return nothing
+end
+
+"""
+    surface_ϕz_from_expansion!(Σϕz, ϕ, s) 
+
+Calculate the value of ϕz at z=s in terms of ϕ at z=0, and s, 
+using a Taylor expansion.
+"""
+function surface_ϕz_from_expansion!(Σϕz, ϕ, s) 
+
+    # Zero out Σϕz
     Σϕz .= 0
+
+    # Loop over ϵᵐ:
     for m = 1:M
-        @. Σϕz += ϕz[m].z.g
+
+        # At each order, add all O(ϵᵐ) contributions to ϕz:
+        for (i, n) = enumerate(m : -1 : 1)
+            # i = 1, 2, ..., m
+            # n = m, m-1, ..., 1
+            #
+            # m = 1 -> ϕ₁z
+            #   * i = 1
+            #   * n = 1
+            #
+            # m = 2 -> ϕ₂z + s * ϕ₁zz
+            #   * i = 1, 2
+            #   * n = 2, 1
+            
+            k = i - 1
+            ∂zᵏ⁺¹_ϕⁿ = ϕ[n][k + 2].g # due to definition of pert. expansion.
+
+            @. Σϕz += s^k / factorial(k) * ∂zᵏ⁺¹_ϕⁿ
+        end
     end
 
     return nothing
 end
 
+
 struct Vars{P, A, B} <: AbstractVars
-           ϕzm :: P
+             ϕ :: P
              Φ :: A
              s :: A
              ϖ :: A
@@ -181,9 +321,9 @@ function Vars(::Dev, order, grid::AbstractGrid{T}) where {Dev, T}
     @devzeros Dev T grid.nx s ϖ Φ Φₓ sₓ ϕz aux_grid
     @devzeros Dev Complex{T} grid.nkr ϖ̂ ŝ aux_coeffs
 
-    ϕzm = PotentialPerturbationExpansion(T, order, grid)
+    ϕ = PotentialPerturbationExpansion(T, order, grid)
 
-    return Vars(ϕzm, Φ, s, ϖ, Φₓ, sₓ, ϕz, aux_grid, ϖ̂, ŝ, aux_coeffs)
+    return Vars(ϕ, Φ, s, ϖ, Φₓ, sₓ, ϕz, aux_grid, ϖ̂, ŝ, aux_coeffs)
 end
 
 """
@@ -201,7 +341,7 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     ldiv!(vars.Φ, grid.rfftplan, ŝ)
     ldiv!(vars.s, grid.rfftplan, Φ̂)
 
-    compute_ϕz!(vars.ϕz, vars.ϕzm, ŝ, vars.s, params, grid)
+    compute_ϕz!(vars.ϕz, vars.ϕ, ŝ, vars.s, params, grid)
 
     ######
     ###### Calculate RHS for s
@@ -216,10 +356,13 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     @views @. ŝₓ = im * grid.kr * ŝ
     ldiv!(vars.sₓ, grid.rfftplan, ŝₓ)
 
-    @. vars.aux_grid = vars.Φₓ * vars.sₓ
-    mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
+    Φₓsₓ = vars.aux_grid
+    Φₓsₓ_hat = vars.aux_coeffs
+    @. Φₓsₓ = vars.Φₓ * vars.sₓ
+    mul!(Φₓsₓ_hat, grid.rfftplan, Φₓsₓ)
 
-    @. Ns = - vars.aux_coeffs
+    # Set Ns.
+    @. Ns = - Φₓsₓ_hat
 
     # Calculate (1 + sₓ²) ϕz
     @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz
@@ -235,10 +378,10 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz^2
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
-    # Add -(1 + sₓ²) ϕz² / 2
-    @. NΦ = - vars.aux_coeffs / 2
+    # Set NΦ to (1 + sₓ²) ϕz² / 2
+    @. NΦ = vars.aux_coeffs / 2
 
-    # Add - g ŝ
+    # Subtract g ŝ
     @. NΦ -= params.g * ŝ
 
     # Calculate Φₓ²
@@ -246,13 +389,13 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     @. Φₓ² = vars.Φₓ^2
     mul!(vars.aux_coeffs, grid.rfftplan, Φₓ²)
 
-    # Add transform of -Φₓ² / 2
-    @. NΦ += - vars.aux_coeffs / 2
+    # Subtract transform of -Φₓ² / 2
+    @. NΦ -= vars.aux_coeffs / 2
 
-    # Add forcing by ϖ
-    vars.ϖ .= params.ϖ.(grid.x, t)
+    # Subtract forcing by ϖ
+    @. vars.ϖ = params.ϖ(grid.x, t)
     mul!(vars.ϖ̂, grid.rfftplan, vars.ϖ)
-    @. NΦ += - vars.ϖ̂
+    @. NΦ -= vars.ϖ̂
 
     dealias!(Ns, grid)
     dealias!(NΦ, grid)
@@ -266,10 +409,10 @@ end
 Update `vars` on `grid` with the `sol`ution.
 """
 function updatevars!(vars, params, grid, sol)
-    compute_ϕz!(vars.ϕz, vars.ϕzm, sol[:, 1], vars.s, params, grid)
+    @views compute_ϕz!(vars.ϕz, vars.ϕ, sol[:, 1], vars.s, params, grid)
 
-    ldiv!(vars.s, grid.rfftplan, sol[:, 1])
-    ldiv!(vars.Φ, grid.rfftplan, sol[:, 2])
+    @views ldiv!(vars.s, grid.rfftplan, sol[:, 1])
+    @views ldiv!(vars.Φ, grid.rfftplan, sol[:, 2])
 
     return nothing
 end
@@ -287,7 +430,7 @@ updatevars!(prob) = updatevars!(prob.vars, prob.params, prob.grid, prob.sol)
 Set the surface displacement `s`.
 """
 function set_s!(prob, s)
-    prob.vars.s .= s
+    @. prob.vars.s = s
     @views mul!(prob.sol[:, 1], prob.grid.rfftplan, prob.vars.s)
 
     updatevars!(prob)
@@ -301,7 +444,7 @@ end
 Set the surface potential `Φ`.
 """
 function set_Φ!(prob, Φ)
-    prob.vars.Φ .= Φ
+    @. prob.vars.Φ = Φ
     @views mul!(sol[:, 2], prob.grid.rfftplan, prob.vars.Φ)
 
     updatevars!(prob)

@@ -20,9 +20,9 @@ examples = [
 
 
 for example in examples
-  example_filepath = joinpath(EXAMPLES_DIR, example)
-  Literate.markdown(example_filepath, OUTPUT_DIR, documenter=true)
-  Literate.notebook(example_filepath, OUTPUT_DIR, documenter=true)
+    example_filepath = joinpath(EXAMPLES_DIR, example)
+    Literate.markdown(example_filepath, OUTPUT_DIR, documenter=true)
+    Literate.notebook(example_filepath, OUTPUT_DIR, documenter=true)
 end
 
 
