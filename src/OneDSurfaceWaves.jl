@@ -327,9 +327,9 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     Ns = view(N, :, 1)
     NΦ = view(N, :, 2)
 
-    ldiv!(vars.Φ, grid.rfftplan, sol[:, 1])
-    ldiv!(vars.s, grid.rfftplan, sol[:, 2])
+    ldiv!(vars.s, grid.rfftplan, ŝ)
 
+    # The Dirichlet-to-Neumann map!
     compute_ϕz!(vars.ϕz, vars.ϕ, Φ̂, vars.s, params, grid)
 
     ######
@@ -364,28 +364,29 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     ######
     
     # Set NΦ = - g ŝ
-    @views @. N[:, 2] = - params.g * ŝ
+    @views @. NΦ = - params.g * ŝ
 
     # Subtract forcing by ϖ
     @. vars.ϖ = params.ϖ(grid.x, t)
     mul!(vars.ϖ̂, grid.rfftplan, vars.ϖ)
-    @views @. N[:, 2] -= vars.ϖ̂
-    
+    @views @. NΦ -= vars.ϖ̂
+
+    # Calculate Φₓ²
+    Φₓ² = vars.aux_grid
+    Φₓ²_hat = vars.aux_coeffs
+    @. Φₓ² = vars.Φₓ^2
+    mul!(Φₓ²_hat, grid.rfftplan, Φₓ²)
+
+    # Subtract transform of -Φₓ² / 2
+    @. NΦ -= Φₓ²_hat / 2
+
     # Calculate (1 + sₓ²) ϕz²
     @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz^2
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
     # Subtract (1 + sₓ²) ϕz² / 2
-    @. NΦ -= vars.aux_coeffs / 2
-
-    # Calculate Φₓ²
-    Φₓ² = vars.aux_grid
-    @. Φₓ² = vars.Φₓ^2
-    mul!(vars.aux_coeffs, grid.rfftplan, Φₓ²)
-
-    # Subtract transform of -Φₓ² / 2
-    @. NΦ -= vars.aux_coeffs / 2
-
+    @. NΦ += vars.aux_coeffs / 2
+    
     @views dealias!(Ns, grid)
     @views dealias!(NΦ, grid)
 
