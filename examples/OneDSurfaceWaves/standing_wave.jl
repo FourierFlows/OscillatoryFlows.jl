@@ -9,13 +9,13 @@ using
     PyPlot
 
 Lx = 2π
-nx = 256
-dt = 0.01
+nx = 64 
+dt = 0.1
 
-problem = Problem(; nx=nx, Lx=Lx, dt=dt)
+problem = Problem(; nx=nx, Lx=Lx, dt=dt, g=1, h=1, order=1)
 
 a = 0.01
-k = 8
+k = 1
 s₀(x) = a * cos(k * x)
 
 # # Standing wave initial condition
@@ -27,12 +27,13 @@ fig, axs = subplots()
 
 function makeplot!(problem)
 
-    cla()
-
     updatevars!(problem)
-    
+
+    cla()
     plot(problem.grid.x, problem.vars.s)
-    pause(0.05)
+    title("$(problem.clock.t)")
+    ylim(-1.1a, 1.1a)
+    pause(0.1)
 
     return nothing
 end

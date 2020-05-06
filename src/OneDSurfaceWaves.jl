@@ -164,7 +164,7 @@ function forward_transform!(ϕm, grid, N=1:length(ϕm))
 end
 
 """
-    set_surface_ϕm!(ϕm, m, ϕz, s, grid) 
+    calculate_ϕm!(ϕ, m, s, grid) 
 
 Computes the value of the mᵗʰ component of ϕz at the surface
 using previously computed lower order vertical derivatives contained in ϕz,
@@ -178,7 +178,7 @@ For `m = 2:4`, this does
 
 This function should not be called for `m = 1`.
 """
-function set_surface_ϕm!(ϕ, m, s, grid)
+function calculate_ϕm!(ϕ, m, s, grid)
     ϕm = ϕ[m][1]
     @. ϕm.g = 0
 
@@ -217,7 +217,7 @@ expansion at the surface.
 function compute_ϕz!(Σϕz, ϕ, Φ̂, s, params, grid)
     @inbounds begin
 
-        M = length(ϕz) # order of expansion
+        M = length(ϕ) # order of expansion
         ϕ₁ = ϕ[1] # Leading-order ϕ
 
         # Set ϕ₁ at the surface
@@ -233,7 +233,7 @@ function compute_ϕz!(Σϕz, ϕ, Φ̂, s, params, grid)
         # Obtain ϕm ~ O(ϵᵐ) for m = 2, ..., M
         for m = 2:M
             # Set ϕ[m][1].g, the surface grid values of ϕ[m]
-            set_surface_ϕm!(ϕ, m, s, grid)
+            calculate_ϕm!(ϕ, m, s, grid)
 
             # Convenient alias
             ϕm = ϕ[m]
@@ -242,13 +242,13 @@ function compute_ϕz!(Σϕz, ϕ, Φ̂, s, params, grid)
             mul!(ϕm[1].c, grid.rfftplan, ϕm[1].g)
 
             # Determine z-derivatives from ϕm[1].c
-            for n = 2:length(ϕm)+1
+            for n = 2:length(ϕm)
                 @. ϕm[n].c = ϕm[1].c * ∂z_Ψ(n, params.h, grid.kr)
             end
 
             # Transform the just-calculated z-derivative of ϕzm 
             # from coefficient space to grid space.
-            inverse_transform!(ϕzm, grid, 2:length(ϕzm))
+            inverse_transform!(ϕm, grid, 2:length(ϕm))
         end
     end
 
@@ -270,26 +270,15 @@ function surface_ϕz_from_expansion!(Σϕz, ϕ, s)
     # Zero out Σϕz
     Σϕz .= 0
 
-    # Loop over ϵᵐ:
-    for m = 1:M
+    # For each ϵᵐ term...
+    for m = 1:length(ϕ)
+        ϕm = ϕ[m]
 
-        # At each order, add all O(ϵᵐ) contributions to ϕz:
-        for (i, n) = enumerate(m : -1 : 1)
-            # i = 1, 2, ..., m
-            # n = m, m-1, ..., 1
-            #
-            # m = 1 -> ϕ₁z
-            #   * i = 1
-            #   * n = 1
-            #
-            # m = 2 -> ϕ₂z + s * ϕ₁zz
-            #   * i = 1, 2
-            #   * n = 2, 1
-            
-            k = i - 1
-            ∂zᵏ⁺¹_ϕⁿ = ϕ[n][k + 2].g # due to definition of pert. expansion.
+        # add every contribution to the Taylor series:
+        for k = 0:length(ϕm) - 2
+            ∂zᵏ⁺¹_ϕᵐ = ϕm[k + 2].g
 
-            @. Σϕz += s^k / factorial(k) * ∂zᵏ⁺¹_ϕⁿ
+            @. Σϕz += s^k / factorial(k) * ∂zᵏ⁺¹_ϕᵐ
         end
     end
 
@@ -338,51 +327,56 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     Ns = view(N, :, 1)
     NΦ = view(N, :, 2)
 
-    ldiv!(vars.Φ, grid.rfftplan, ŝ)
-    ldiv!(vars.s, grid.rfftplan, Φ̂)
+    ldiv!(vars.Φ, grid.rfftplan, sol[:, 1])
+    ldiv!(vars.s, grid.rfftplan, sol[:, 2])
 
-    compute_ϕz!(vars.ϕz, vars.ϕ, ŝ, vars.s, params, grid)
+    compute_ϕz!(vars.ϕz, vars.ϕ, Φ̂, vars.s, params, grid)
 
     ######
-    ###### Calculate RHS for s
+    ###### Calculate Ns = ∂t s
     ######
     
+    # Calculate (1 + sₓ²) ϕz
+    ŝₓ = vars.aux_coeffs
+    @views @. ŝₓ = im * grid.kr * ŝ
+    ldiv!(vars.sₓ, grid.rfftplan, ŝₓ)
+
+    @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz
+    mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
+
+    @. Ns = vars.aux_coeffs
+
     # Calculate Φₓ sₓ
     Φ̂ₓ = vars.aux_coeffs
     @views @. Φ̂ₓ = im * grid.kr * Φ̂
     ldiv!(vars.Φₓ, grid.rfftplan, Φ̂ₓ)
-
-    ŝₓ = vars.aux_coeffs
-    @views @. ŝₓ = im * grid.kr * ŝ
-    ldiv!(vars.sₓ, grid.rfftplan, ŝₓ)
 
     Φₓsₓ = vars.aux_grid
     Φₓsₓ_hat = vars.aux_coeffs
     @. Φₓsₓ = vars.Φₓ * vars.sₓ
     mul!(Φₓsₓ_hat, grid.rfftplan, Φₓsₓ)
 
-    # Set Ns.
-    @. Ns = - Φₓsₓ_hat
-
-    # Calculate (1 + sₓ²) ϕz
-    @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz
-    mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
-
-    @. Ns += vars.aux_coeffs
+    # Subtract the transform of Φₓsₓ
+    @. Ns -= Φₓsₓ_hat
 
     ######
-    ###### Calculate RHS for Φ
+    ###### Calculate NΦ = ∂t Φ
     ######
+    
+    # Set NΦ = - g ŝ
+    @views @. N[:, 2] = - params.g * ŝ
+
+    # Subtract forcing by ϖ
+    @. vars.ϖ = params.ϖ(grid.x, t)
+    mul!(vars.ϖ̂, grid.rfftplan, vars.ϖ)
+    @views @. N[:, 2] -= vars.ϖ̂
     
     # Calculate (1 + sₓ²) ϕz²
     @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz^2
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
-    # Set NΦ to (1 + sₓ²) ϕz² / 2
-    @. NΦ = vars.aux_coeffs / 2
-
-    # Subtract g ŝ
-    @. NΦ -= params.g * ŝ
+    # Subtract (1 + sₓ²) ϕz² / 2
+    @. NΦ -= vars.aux_coeffs / 2
 
     # Calculate Φₓ²
     Φₓ² = vars.aux_grid
@@ -392,13 +386,8 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     # Subtract transform of -Φₓ² / 2
     @. NΦ -= vars.aux_coeffs / 2
 
-    # Subtract forcing by ϖ
-    @. vars.ϖ = params.ϖ(grid.x, t)
-    mul!(vars.ϖ̂, grid.rfftplan, vars.ϖ)
-    @. NΦ -= vars.ϖ̂
-
-    dealias!(Ns, grid)
-    dealias!(NΦ, grid)
+    @views dealias!(Ns, grid)
+    @views dealias!(NΦ, grid)
 
     return nothing
 end
