@@ -52,6 +52,7 @@ makedocs(  modules = [OscillatoryFlows],
                          "Home"    => "index.md",
                          "Modules" => Any[
                                           "modules/onedwaveequation.md",
+                                          "modules/onedsurfacewaves.md",
                                          ],
                          "Examples" => [
                          "OneDWaveEquation" => Any[

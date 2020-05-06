@@ -209,11 +209,11 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     
     # Calculate Φₓ sₓ
     Φ̂ₓ = vars.aux_coeffs
-    @views @. Φ̂ₓ = im * grid.kr * ŝ
+    @views @. Φ̂ₓ = im * grid.kr * Φ̂
     ldiv!(vars.Φₓ, grid.rfftplan, Φ̂ₓ)
 
     ŝₓ = vars.aux_coeffs
-    @views @. ŝₓ = im * grid.kr * Φ̂
+    @views @. ŝₓ = im * grid.kr * ŝ
     ldiv!(vars.sₓ, grid.rfftplan, ŝₓ)
 
     @. vars.aux_grid = vars.Φₓ * vars.sₓ
@@ -235,26 +235,28 @@ function calcN!(N, sol, t, clock, vars, params, grid)
     @. vars.aux_grid = (1 + vars.sₓ^2) * vars.ϕz^2
     mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
 
-    # Add -(1 + sₓ²) ϕz²
-    @. NΦ = vars.aux_coeffs / 2
+    # Add -(1 + sₓ²) ϕz² / 2
+    @. NΦ = - vars.aux_coeffs / 2
 
     # Add - g ŝ
-    @. NΦ = - params.g * ŝ
+    @. NΦ -= params.g * ŝ
 
     # Calculate Φₓ²
-    @. vars.aux_grid = vars.Φₓ^2
-    mul!(vars.aux_coeffs, grid.rfftplan, vars.aux_grid)
+    Φₓ² = vars.aux_grid
+    @. Φₓ² = vars.Φₓ^2
+    mul!(vars.aux_coeffs, grid.rfftplan, Φₓ²)
 
     # Add transform of -Φₓ² / 2
-    @. NΦ = - vars.aux_coeffs / 2
+    @. NΦ += - vars.aux_coeffs / 2
 
     # Add forcing by ϖ
     vars.ϖ .= params.ϖ.(grid.x, t)
     mul!(vars.ϖ̂, grid.rfftplan, vars.ϖ)
-    @. NΦ = - vars.ϖ̂
+    @. NΦ += - vars.ϖ̂
 
     dealias!(Ns, grid)
     dealias!(NΦ, grid)
+
     return nothing
 end
 
