@@ -21,7 +21,7 @@ for dev in devices
   end
 
   @testset "OneDSurfaceWaves" begin
-      @test typeof(OneDSurfaceWaves.Problem(nx=4)) <: OneDSurfaceWaves.Problem
+      @test typeof(OneDSurfaceWaves.Problem(nx=4)) <: FourierFlows.Problem
   end
 end
 

@@ -41,7 +41,7 @@ function Problem(T = Float64;
                  )
 
       vars = Vars(order, grid)
-       eqn = WaveEquation(grid)
+       eqn = SurfaceWaveEquation(grid)
 
     #return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU();
     #                            stepperkwargs...)
