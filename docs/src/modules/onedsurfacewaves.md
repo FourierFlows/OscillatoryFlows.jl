@@ -15,10 +15,10 @@ and the surface potential ``\Phi(x, t)`` defined via
 \Phi(x, t) \equiv \phi(x, z=s(x, t), t) \, .
 ```
 
-The velocity and pressure fields are related to ``\phi`` via
+The velocity and pressure fields are related to the velocity potential ``\phi`` via
 
 ```math
-\bm{u} \equiv \nabla \phi \, \qquad p \equiv - \phi_t - \frac{1}{2} \left | \bnabla \phi \right |^2 \, .
+\bm{u} \equiv \boldsymbol{\nabla} \phi  \text{ and } p \equiv - \phi_t - \frac{1}{2} \left | \boldsymbol{\nabla} \phi \right |^2 \, .
 ```
 
 The surface elevation obeys
@@ -49,13 +49,18 @@ For this we introduce a perturbation expansion of ``\phi`` at ``z=s``,
 \phi(x, z, t) = \sum_{m=1}^M \phi_m(x, z, t) \, ,
 ```
 
-where each ``\phi_m`` is small than ``\phi_{m-1}`` by ``O(\epsilon)``, where
+where each ``\phi_m`` is smaller than ``\phi_{m-1}`` by ``O(\epsilon)``, where
 ``\epsilon`` is the surface slope (which must be small for the validity of this algorithm).
 
 ```math
-\Phi(x, t) = \phi \at{z=s} \\[1ex]
-            \approx \big [   \overbrace{\phi_1 }^{O(\epsilon)}
-                            + \overbrace{\phi_2 + s \phi_{1z}}^{O \left ( \epsilon^2 \right )}
-                            + \overbrace{\phi_3 + s \phi_{2z} + \frac{1}{2} s^2 \phi_{1zz}}^{O \left ( \epsilon^3 \right )} + \cdots \, \big ]_{z=0} \\[1ex]
-            = \sum_{m=1}^M \sum_{n=0}^{M-m} \frac{s^n}{n!} \partial_z^n \phi_m \at{z=0} + O \left ( \epsilon^M \right ) \per
+\begin{aligned}
+\Phi(x, t) & = \phi |_{z=s} \\
+           & \approx \big [   \underbrace{\phi_1}_{O(\epsilon)}
+                            + \underbrace{\phi_2 + s \phi_{1z}}_{O \left ( \epsilon^2 \right )}
+                            + \underbrace{\phi_3 + s \phi_{2z} + \tfrac{1}{2} s^2 \phi_{1zz}}_{O \left ( \epsilon^3 \right )} + \dots \, \big ]_{z=0} \\
+           & = \sum_{m=1}^M \; \underbrace{ \sum_{n=0}^{M-m} \frac{s^n}{n!} \partial_z^n \phi_m |_{z=0} }_{\text{all terms } \phi_m} + O \left ( \epsilon^{M+1} \right ) \, ,\\ 
+           & = \sum_{m=1}^M \; \underbrace{ \sum_{n=0}^{m-1} \frac{s^n}{n!} \partial_z^n \phi_{m-n} |_{z=0} }_{\text{all terms } O(\epsilon^m)}  + O \left ( \epsilon^{M+1} \right ) \, . 
+\end{aligned}
 ```
+
+
