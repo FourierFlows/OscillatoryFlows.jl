@@ -1,5 +1,9 @@
 """
     OneDSurfaceWaves
+
+Solver for the potential flow equations in (x, z) beneath a 
+free surface s(x, t). The system is one-dimensional because
+the z-problem is solved analytically.
 """
 module OneDSurfaceWaves
 
@@ -22,22 +26,25 @@ using LinearAlgebra: mul!, ldiv!
 
 Construct a wave propagation problem with steady or time-varying flow.
 """
-function Problem(;
-                       nx = 128,
+function Problem(T = Float64;
+                       nx = 256,
                        Lx = 2π,
-                    order = 3,
                         g = 9.81,
                         h = 1,
+                        ϖ = zerofunction,
+                     grid = OneDGrid(nx, Lx),
+                    order = 3,
+                   params = Params(T, g=g, h=h, ϖ=ϖ),
+                  stepper = :RK4,
                        dt = 0.01,
-                  stepper = "RK4",
-                        T = Float64,
+                  #stepperkwargs...
                  )
 
-      grid = OneDGrid(CPU(), nx, Lx; T=T)
-    params = Params(T, g=g, h=h)
-      vars = Vars(CPU(), order, grid)
+      vars = Vars(order, grid)
        eqn = WaveEquation(grid)
 
+    #return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU();
+    #                            stepperkwargs...)
     return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU())
 end
 
@@ -49,22 +56,23 @@ end
 
 zerofunction(x, t) = 0
 
+"""
+    Params(T=Float64; g=9.81, h=1, ϖ=zerofunction)
+
+Returns parameters for `OneDSurfaceWaves` problem with
+`g`raviational acceleration domain `h`eight (or depth), and 
+atmospheric pressure forcing, `ϖ` normalized by the density
+of the fluid.
+"""
 Params(T=Float64; g=9.81, h=1, ϖ=zerofunction) = Params{T, typeof(ϖ)}(g, h, ϖ)
 
 """
-    WaveEquation(beta, grid)
+    SurfaceWaveEquation(grid)
 
-Returns a wave equation with damping beta, on grid.
+Returns an equation for surface waves on `grid`.
 """
-function WaveEquation(grid)
-    T = typeof(grid.Lx)
-
-    # The term linear in s is L[:, 1]
-    # The term linear in Φ is L[:, 2]
-    L = zeros(Complex{T}, grid.nkr, 2)
-
-    return FourierFlows.Equation(L, calcN!, grid)
-end
+SurfaceWaveEquation(grid) =
+    FourierFlows.Equation(0, calcN!, grid, dims=(grid.nkr, 2))
 
 """
     PotentialPerturbationExpansion(T, order, grid)
@@ -175,15 +183,17 @@ For `m = 2:4`, this does
     `ϕ₂ = - s * ϕ₁.z`    
     `ϕ₃ = - s * ϕ₂.z - s^2 / 2 * ϕ₁.zz`    
     `ϕ₄ = - s * ϕ₃.z - s^2 / 2 * ϕ₂.zz - s^3 / 6 * ϕ₁.zzz`    
-
-This function should not be called for `m = 1`.
 """
 function calculate_ϕm!(ϕ, m, s, grid)
+
+    @assert m > 1 "calculate_ϕm! is only correct for m > 1"
+
     ϕm = ϕ[m][1]
+
     @. ϕm.g = 0
 
-    for (i, n) = enumerate((m-1) : -1 : 1)
-        @. ϕm.g -= s^i * ϕ[n][i+1].g / factorial(i)
+    for n = 1:m-1
+        @. ϕm.g -= s^n * ϕ[m - n][n + 1].g / factorial(n)
     end
 
     return nothing
@@ -217,20 +227,25 @@ expansion at the surface.
 function compute_ϕz!(Σϕz, ϕ, Φ̂, s, params, grid)
     @inbounds begin
 
+        #####
+        ##### First, we find ϕ₁ and its derivatives
+        #####
+        
         M = length(ϕ) # order of expansion
-        ϕ₁ = ϕ[1] # Leading-order ϕ
+        ϕ₁ = ϕ[1] # Leading-order ϕ, ϕz, ϕzz, etc.
 
-        # Set ϕ₁ at the surface
-        @. ϕ₁[1].c = Φ̂
-
-        # Obtain the first n derivatives of ϕ₁ in grid space
-        for n = 1:M
+        # Obtain ϕ₁ and its derivatives in Fourier space
+        for n = 0:M
             @. ϕ₁[n+1].c = Φ̂ * ∂z_Ψ(n, params.h, grid.kr)
         end
 
+        # Transform ϕ₁ and its derivatives to grid space
         inverse_transform!(ϕ₁, grid)
 
-        # Obtain ϕm ~ O(ϵᵐ) for m = 2, ..., M
+        #####
+        ##### Obtain ϕm ~ O(ϵᵐ) for m = 2, ..., M
+        #####
+        
         for m = 2:M
             # Set ϕ[m][1].g, the surface grid values of ϕ[m]
             calculate_ϕm!(ϕ, m, s, grid)
@@ -270,7 +285,7 @@ function surface_ϕz_from_expansion!(Σϕz, ϕ, s)
     # Zero out Σϕz
     Σϕz .= 0
 
-    # For each ϵᵐ term...
+    # For each ϕm term...
     for m = 1:length(ϕ)
         ϕm = ϕ[m]
 
@@ -284,7 +299,6 @@ function surface_ϕz_from_expansion!(Σϕz, ϕ, s)
 
     return nothing
 end
-
 
 struct Vars{P, A, B} <: AbstractVars
              ϕ :: P
@@ -305,10 +319,10 @@ end
 
 Returns the vars for a one-dimensional free surface problem on `grid`.
 """
-function Vars(::Dev, order, grid::AbstractGrid{T}) where {Dev, T}
+function Vars(order, grid::AbstractGrid{T}) where {Dev, T}
 
-    @devzeros Dev T grid.nx s ϖ Φ Φₓ sₓ ϕz aux_grid
-    @devzeros Dev Complex{T} grid.nkr ϖ̂ ŝ aux_coeffs
+    @devzeros CPU T grid.nx s ϖ Φ Φₓ sₓ ϕz aux_grid
+    @devzeros CPU Complex{T} grid.nkr ϖ̂ ŝ aux_coeffs
 
     ϕ = PotentialPerturbationExpansion(T, order, grid)
 
@@ -399,10 +413,16 @@ end
 Update `vars` on `grid` with the `sol`ution.
 """
 function updatevars!(vars, params, grid, sol)
-    @views compute_ϕz!(vars.ϕz, vars.ϕ, sol[:, 1], vars.s, params, grid)
+    ŝ = view(sol, :, 1)
+    Φ̂ = view(sol, :, 2)
 
-    @views ldiv!(vars.s, grid.rfftplan, sol[:, 1])
-    @views ldiv!(vars.Φ, grid.rfftplan, sol[:, 2])
+    compute_ϕz!(vars.ϕz, vars.ϕ, Φ̂, vars.s, params, grid)
+
+    ldiv!(vars.s, grid.rfftplan, ŝ)
+    ldiv!(vars.Φ, grid.rfftplan, Φ̂)
+
+    @. vars.aux_coeffs = im * grid.kr * ŝ
+    ldiv!(vars.sₓ, grid.rfftplan, vars.aux_coeffs)
 
     return nothing
 end
