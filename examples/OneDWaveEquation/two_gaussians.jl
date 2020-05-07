@@ -16,7 +16,7 @@ nothing # hide
 
 # ## A Gaussian initial condition
 #
-# This initial condition has width √25 = 5
+# This initial condition has width $ \sqrt(2/50) = 1/5 $
 
 ξ₀(x) = exp(-50x^2)
 
@@ -24,8 +24,8 @@ set_ξ!(problem, ξ₀)
 
 # ## Run, and animate the results
 
-anim = @animate for i = 1:100
-    stepforward!(problem, 1)
+anim = @animate for i = 1:25
+    stepforward!(problem, 4)
     updatevars!(problem)
 
     plot(problem.grid.x, problem.vars.ξ,
@@ -33,4 +33,4 @@ anim = @animate for i = 1:100
          ylims = (-0.5, 1.1))
 end
 
-mp4(anim, "two_gaussians.mp4", fps=12)
+mp4(anim, "two_gaussians.mp4", fps=8)
