@@ -11,7 +11,9 @@ export
     Problem,
     updatevars!,
     set_s!,
-    set_Φ!
+    set_Φ!,
+    VelocityPotential,
+    calculate!
 
 using
     FFTW,
@@ -22,9 +24,51 @@ using
 using LinearAlgebra: mul!, ldiv!
 
 """
-    Problem(; parameters...)
+    Problem(T=Float64; nx = 256,
+                       Lx = 2π,
+                       dt = 0.01,
+                        g = 9.81,
+                        h = 1,
+                        ϖ = zerofunction,
+                    order = 3,
+                  stepper = :FilteredRK4,
+                     grid = OneDGrid(nx, Lx; T=T),
+                   params = Params(T, g=g, h=h, ϖ=ϖ),
+                       filterkwargs...)
 
 Construct a wave propagation problem with steady or time-varying flow.
+
+Arguments
+=========
+
+    T (DataType): The floating point precision of the problem.
+ 
+        nx (Int): The number of grid points
+ 
+     Lx (Number): The horizontal extent of the domain
+ 
+     dt (Number): The time step to used when stepping the problem forward.
+ 
+      g (Number): Gravitational acceleration
+ 
+      h (Number): The depth of the domain. This affects the gravity wave
+                  dispersion relation.
+ 
+    ϖ (Function): A forcing function called with the signature ϖ(x, t).
+ 
+ grid (OneDGrid): The numerical grid. The parameters nx, Lx are irrelevant
+                  if the grid is specified directly.
+ 
+     order (Int): The order of the perturbation expansion used to calculate the
+                  'Dirichlet-to-Neumann' map, or the relationship between the 
+                  velocity potential at the surface, and its vertical gradient.
+                  
+stepper (Symbol): The type of time-stepper. We recommend FilteredRK4 for
+                  this numerical method.
+
+   filterkwargs : Additional keyword arguments are passed to the filtered 
+                  time-stepper, and can be used to modify the construction 
+                  of the numerical filter used during time-stepping.
 """
 function Problem(T = Float64;
                        nx = 256,
@@ -32,20 +76,19 @@ function Problem(T = Float64;
                         g = 9.81,
                         h = 1,
                         ϖ = zerofunction,
-                     grid = OneDGrid(nx, Lx),
                     order = 3,
-                   params = Params(T, g=g, h=h, ϖ=ϖ),
-                  stepper = :RK4,
+                  stepper = :FilteredRK4,
                        dt = 0.01,
-                  #stepperkwargs...
+                     grid = OneDGrid(nx, Lx; T=T),
+                   params = Params(T, g=g, h=h, ϖ=ϖ),
+                  filterkwargs...
                  )
 
       vars = Vars(order, grid)
        eqn = SurfaceWaveEquation(grid)
 
-    #return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU();
-    #                            stepperkwargs...)
-    return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU())
+    return FourierFlows.Problem(eqn, stepper, dt, grid, vars, params, CPU();
+                                filterkwargs...)
 end
 
 struct Params{T, P} <: AbstractParams
@@ -462,7 +505,89 @@ function set_Φ!(prob, Φ)
     return nothing
 end
 
-set_s!(prob, s::Function) = set_s!(prob, s.(prob.grid.x))
-set_Φ!(prob, Φ::Function) = set_Φ!(prob, Φ.(prob.grid.x))
+set_s!(problem, s::Function) = set_s!(problem, s.(problem.grid.x))
+set_Φ!(problem, Φ::Function) = set_Φ!(problem, Φ.(problem.grid.x))
+
+"""
+    struct VelocityPotential{A, B, K, X, Z, I, P}
+
+A struct that represents the 2D velocity potential in (x, z)
+beneath a free surface that varies in x.
+"""
+struct VelocityPotential{A, B, K, X, Z, I, P}
+           ϕ :: A
+           u :: A
+           w :: A
+           ϕ̂ :: B
+           û :: B
+           ŵ :: B
+          nz :: Int
+           k :: K
+           x :: X
+           z :: Z
+    rfftplan :: I
+     problem :: P
+end
+
+"""
+    VelocityPotential(problem; nz)
+
+Returns a 2D velocity potential object with `nz` vertical nodes
+correpsonding to the `OneDSurfaceWaves` `problem`.
+The horizontal grid is inherited from `problem`.
+The vertical grid extends from z = -problem.params.h to z=0.
+"""
+function VelocityPotential(problem; nz)
+    grid = problem.grid
+
+    k = reshape(grid.kr, grid.nkr, 1)
+    x = reshape(grid.x, grid.nx, 1)
+    z = range(-problem.params.h, stop=0, length=nz)
+    z = reshape(z, 1, nz)
+
+    ϕ = zeros(eltype(grid), grid.nx, nz)
+    u = zeros(eltype(grid), grid.nx, nz)
+    w = zeros(eltype(grid), grid.nx, nz)
+
+    ϕ̂ = zeros(Complex{eltype(grid)}, grid.nkr, nz)
+    û = zeros(Complex{eltype(grid)}, grid.nkr, nz)
+    ŵ = zeros(Complex{eltype(grid)}, grid.nkr, nz)
+
+    rfftplan = plan_rfft(ϕ, 1)
+
+    return VelocityPotential(ϕ, u, w, ϕ̂, û, ŵ, nz, k, x, z, rfftplan, problem)
+end
+
+function calculate!(potential::VelocityPotential)
+
+    updatevars!(potential.problem)
+
+    k = potential.k
+    z = potential.z
+    h = potential.problem.params.h
+
+    ϕ̂ = potential.ϕ̂
+    û = potential.û
+    ŵ = potential.ŵ
+
+    ϕ̂ .= 0
+    ŵ .= 0
+
+    for ϕᵐ in potential.problem.vars.ϕ
+        # Fourier coefficients of the O(ϵᵐ) potential at z=0
+        @inbounds ϕ̂ᵐ = reshape(ϕᵐ[1].c, length(k), 1) 
+
+        @. ϕ̂ +=     ϕ̂ᵐ * cosh(k * (z + h)) / cosh(k * h)
+        @. ŵ += k * ϕ̂ᵐ * sinh(k * (z + h)) / cosh(k * h)
+    end
+
+    @. û = im * k * ϕ̂ 
+
+    ldiv!(potential.ϕ, potential.rfftplan, ϕ̂)
+    ldiv!(potential.u, potential.rfftplan, û)
+    ldiv!(potential.w, potential.rfftplan, ŵ)
+    
+    return nothing
+end
 
 end # module
