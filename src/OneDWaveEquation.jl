@@ -127,7 +127,8 @@ function updatevars!(problem)
     @. vars.uh = (sol[:, 2] + sol[:, 1]) / 2
     @. vars.ξh = (sol[:, 2] - sol[:, 1]) * im / (2 * σ(params.c, grid.kr))
 
-    @inbounds vars.ξh[1] = ( vars.ξ0u0_mean[1] + vars.ξ0u0_mean[2] * ( β==0 ? t : (1-exp(β*t))/β ) )*grid.nx
+    @inbounds vars.ξh[1] = ( vars.ξ0u0_mean[1] + vars.ξ0u0_mean[2] * ( β==0 ? t : (1-exp(-β*t))/β ) )*grid.nx
+    @inbounds vars.uh[1] = ( vars.ξ0u0_mean[2] * exp(-β*t) )*grid.nx
 
     ldiv!(vars.ξ, grid.rfftplan, vars.ξh)
     ldiv!(vars.u, grid.rfftplan, vars.uh)
