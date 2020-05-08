@@ -85,11 +85,12 @@ function WaveEquation(c, grid)
     return FourierFlows.Equation(L, calcN!, grid)
 end
 
-struct Vars{A, B} <: AbstractVars
-     ξ :: A
-     u :: A
-    ξh :: B
-    uh :: B
+struct Vars{A, B, A2} <: AbstractVars
+          ξ :: A
+          u :: A
+         ξh :: B
+         uh :: B
+  ξ0u0_mean :: A2
 end
 
 """
@@ -100,7 +101,8 @@ Returns the vars for a one-dimensional wave equation problem problem on `grid`.
 function Vars(::Dev, grid::AbstractGrid{T}) where {Dev, T}
     @devzeros Dev T grid.nx ξ u
     @devzeros Dev Complex{T} grid.nkr ξh uh
-    return Vars(ξ, u, ξh, uh)
+    @devzeros Dev Complex{T} 2 ξ0u0_mean
+    return Vars(ξ, u, ξh, uh, ξ0u0_mean)
 end
 
 """
@@ -115,28 +117,23 @@ function calcN!(N, sol, t, clock, vars, params, grid)
 end
 
 """
-    updatevars!(vars, grid, sol)
+    updatevars!(prob)
 
-Update `vars` on `grid` with the `sol`ution.
+Update `prob.vars` in the one-dimensional wave `prob`lem
 """
-function updatevars!(vars, params, grid, sol)
+function updatevars!(problem) 
+    vars, params, grid, sol = problem.vars, problem.params, problem.grid, problem.sol
+    β, t = params.β, problem.clock.t
     @. vars.uh = (sol[:, 2] + sol[:, 1]) / 2
     @. vars.ξh = (sol[:, 2] - sol[:, 1]) * im / (2 * σ(params.c, grid.kr))
 
-    @inbounds vars.ξh[1] = 0
+    @inbounds vars.ξh[1] = ( vars.ξ0u0_mean[1] + vars.ξ0u0_mean[2] * ( β==0 ? t : (1-exp(β*t))/β ) )*grid.nx
 
     ldiv!(vars.ξ, grid.rfftplan, vars.ξh)
     ldiv!(vars.u, grid.rfftplan, vars.uh)
 
     return nothing
 end
-
-"""
-    updatevars!(prob)
-
-Update `prob.vars` in the one-dimensional wave `prob`lem
-"""
-updatevars!(prob) = updatevars!(prob.vars, prob.params, prob.grid, prob.sol)
 
 """
     set_u!(prob, u)
@@ -149,6 +146,7 @@ function set_u!(prob, u)
 
     # Set the velocity field
     prob.vars.u .= u
+    prob.vars.ξ0u0_mean[2] = sum(u)/prob.grid.nx
     mul!(prob.vars.uh, prob.grid.rfftplan, prob.vars.u)
 
     # Set velocity u, and restore displacement ξ
@@ -169,6 +167,7 @@ function set_ξ!(prob, ξ)
 
     # Set the velocity field
     prob.vars.ξ .= ξ
+    prob.vars.ξ0u0_mean[1] = sum(ξ)/prob.grid.nx
     mul!(prob.vars.ξh, prob.grid.rfftplan, prob.vars.ξ)
 
     # Set velocity u, and restore displacement ξ
