@@ -41,12 +41,12 @@ nothing # hide
 # using the dispersion relation. For t > 0, the propagating
 # wave solution has the displacement
 #
-# $ ξ(x, t) = \cos[k (x - c t)]\, . $
+# $ ξ(x, t) = \cos(\,k (x - c t)\,)\, . $
 #
 # This implies that the velocity of the standing wave,
 # $u = ∂_t ξ$, is
 #
-# $ u(x, t) = k c \sin[k (x - c t))]\, .$
+# $ u(x, t) = k c \sin(\, k (x - c t)\,)\, .$
 #
 # Taking $t=0$ determines the initial conditions, 
 # $ξ(x, t=0)$ and $u(x, t=0)$.
@@ -70,24 +70,24 @@ set_u!(propagating_problem, u₀)
 # We're finally ready to time-step our problem forward.
 # Along the way, we create an animation to visualize the solution.
 
-anim = @animate for i = 1:50
+anim = @animate for i = 1:51
+    standing_plot = 
+        plot(standing_problem.grid.x, standing_problem.vars.ξ,
+             title = @sprintf("Standing wave, t = %.2f", standing_problem.clock.t),
+             xlabel = "x", ylabel = "ξ", ylims = (-1, 1))
+             
+    propagating_plot = 
+        plot(propagating_problem.grid.x, propagating_problem.vars.ξ,
+             title = @sprintf("Propagating wave, t = %.2f ", standing_problem.clock.t),
+             xlabel = "x", ylabel = "ξ", ylims = (-1, 1))
+
+    plot(standing_plot, propagating_plot, layout = (2, 1), legend = false) # plot before stepforward!() to get frame with initial condition
+
     stepforward!(standing_problem, 2)
     stepforward!(propagating_problem, 2)
 
     updatevars!(standing_problem)
     updatevars!(propagating_problem)
-
-    standing_plot = 
-        plot(standing_problem.grid.x, standing_problem.vars.ξ,
-             title = @sprintf("Standing wave, t = %.2f", standing_problem.clock.t),
-             xlabel = "x", ylabel = "s", ylims = (-1, 1))
-             
-    propagating_plot = 
-        plot(propagating_problem.grid.x, propagating_problem.vars.ξ,
-             title = @sprintf("Propagating wave, t = %.2f ", standing_problem.clock.t),
-             xlabel = "x", ylabel = "s", ylims = (-1, 1))
-
-    plot(standing_plot, propagating_plot, layout = (2, 1), legend = false)
 end
 
-mp4(anim, "standing_propagating_waves.mp4", fps=8) # hide
+mp4(anim, "standing_propagating_waves.mp4", fps=12) # hide

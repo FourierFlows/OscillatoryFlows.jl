@@ -16,26 +16,31 @@ nothing # hide
 
 # ## A Gaussian initial condition
 #
-# This initial condition has width $ \sqrt(2/50) = 1/5 $
+# This initial condition is a Gaussian with variance $1/10$.
 
-ξ₀(x) = exp(-50x^2)
+σ = 1/10 # variance
+ξ₀(x) = exp( - x^2 / (2σ^2) )
 
 set_ξ!(problem, ξ₀)
 
 function makeplot(problem)
     p = plot(problem.grid.x, problem.vars.ξ,
+          ylims = (-0.5, 1.1),
           title = @sprintf("Two Gaussians, t = %.2f", problem.clock.t),
-          ylims = (-0.5, 1.1), 
+         xlabel = "x",
+         ylabel = "ξ",
          legend = false)
     return p
 end
 
+nothing # hide
+
 # ## Run, and animate the results
 
 anim = @animate for i = 1:51
-    makeplot(problem)
+    makeplot(problem)   # plot before stepforward!() to get frame with initial condition
     stepforward!(problem, 2)
     updatevars!(problem)
 end
 
-mp4(anim, "two_gaussians.mp4", fps=8)
+mp4(anim, "two_gaussians.mp4", fps=12)
