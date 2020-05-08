@@ -10,7 +10,7 @@ using
 
 # ## Build the problem
 
-problem = Problem(; nx=256, Lx=2π, c=1, b=0, dt=0.01)
+problem = Problem(; nx=256, Lx=2π, c=1, β=0, dt=0.01)
 
 nothing # hide
 
@@ -22,23 +22,22 @@ nothing # hide
 
 set_ξ!(problem, ξ₀)
 
-# ## Run, and animate the results
-
-anim = @animate 
-
-plot(problem.grid.x, problem.vars.ξ,
-      title = @sprintf("Two Gaussians, t = %.2f", problem.clock.t),
-      ylims = (-0.5, 1.1), 
-     legend = false))
-
-for i = 1:50
-    stepforward!(problem, 2)
-    updatevars!(problem)
-
-    plot(problem.grid.x, problem.vars.ξ,
+function makeplot(problem)
+    p = plot(problem.grid.x, problem.vars.ξ,
           title = @sprintf("Two Gaussians, t = %.2f", problem.clock.t),
           ylims = (-0.5, 1.1), 
-         legend = false))
+         legend = false)
+    return p
+end
+
+makeplot(problem)
+
+# ## Run, and animate the results
+
+anim = @animate for i = 1:51
+    makeplot(problem)
+    stepforward!(problem, 2)
+    updatevars!(problem)
 end
 
 mp4(anim, "two_gaussians.mp4", fps=8)
