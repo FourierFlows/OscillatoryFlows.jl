@@ -17,6 +17,7 @@ Lx = 2π     # domain length
 nx = 256    # number of grid points
  c = 1      # wave phase speed
 dt = 0.01   # time-step
+ β = 0      # linear drag coefficient
 
 nothing # hide
 
@@ -25,8 +26,8 @@ nothing # hide
 # We set up two problems: one to simulate a standing wave, and
 # another to simulate a propagating wave.
 
-   standing_problem = Problem(; nx=nx, Lx=Lx, c=c, beta=0, dt=dt)
-propagating_problem = Problem(; nx=nx, Lx=Lx, c=c, beta=0, dt=dt)
+   standing_problem = Problem(; nx=nx, Lx=Lx, c=c, β=β, dt=dt)
+propagating_problem = Problem(; nx=nx, Lx=Lx, c=c, β=β, dt=dt)
 
 nothing # hide
 
@@ -40,12 +41,12 @@ nothing # hide
 # using the dispersion relation. For t > 0, the propagating
 # wave solution has the displacement
 #
-# $ ξ(x, t) = \cos(k x - k c t) $
+# $ ξ(x, t) = \cos[k (x - c t)]\, . $
 #
 # This implies that the velocity of the standing wave,
 # $u = ∂_t ξ$, is
 #
-# $ u(x, t) = k * c * \sin(k * x - k * c * t) $
+# $ u(x, t) = k c \sin[k (x - c t))]\, .$
 #
 # Taking $t=0$ determines the initial conditions, 
 # $ξ(x, t=0)$ and $u(x, t=0)$.
@@ -69,9 +70,9 @@ set_u!(propagating_problem, u₀)
 # We're finally ready to time-step our problem forward.
 # Along the way, we create an animation to visualize the solution.
 
-anim = @animate for i = 1:25
-    stepforward!(standing_problem, 4)
-    stepforward!(propagating_problem, 4)
+anim = @animate for i = 1:50
+    stepforward!(standing_problem, 2)
+    stepforward!(propagating_problem, 2)
 
     updatevars!(standing_problem)
     updatevars!(propagating_problem)

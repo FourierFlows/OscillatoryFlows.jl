@@ -360,14 +360,6 @@ git-tree-sha1 = "12ce190210d278e12644bcadf5b21cbdcf225cd3"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.2.0"
 
-[[OscillatoryFlows]]
-deps = ["FFTW", "FourierFlows", "LinearAlgebra", "Reexport"]
-git-tree-sha1 = "ac09d78da1698676157dbd2d373d04fa9d0846cb"
-repo-rev = "master"
-repo-url = "https://github.com/FourierFlows/OscillatoryFlows.jl"
-uuid = "b30a42ed-5b83-40e3-a6f9-c071166b552b"
-version = "0.1.0"
-
 [[Parsers]]
 deps = ["Dates", "Test"]
 git-tree-sha1 = "72c3451932513427caffbd8bab15643ad693804b"

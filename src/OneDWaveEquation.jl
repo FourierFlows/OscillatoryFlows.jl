@@ -44,7 +44,7 @@ Construct a wave propagation problem with steady or time-varying flow.
 function Problem(;
                        nx = 128,
                        Lx = 2π,
-                     beta = 0,
+                        β = 0,
                         c = 0.01,
                        dt = 0.01,
                   stepper = "ETDRK4",
@@ -52,7 +52,7 @@ function Problem(;
                  )
 
       grid = OneDGrid(CPU(), nx, Lx; T=T)
-    params = Params{T}(c, beta)
+    params = Params{T}(c, β)
       vars = Vars(CPU(), grid)
        eqn = WaveEquation(c, grid)
 
@@ -61,16 +61,16 @@ end
 
 struct Params{T} <: AbstractParams
        c :: T
-    beta :: T
+       β :: T
 end
 
 # The dispersion relation
 σ(c, k) = c * k
 
 """
-    WaveEquation(beta, grid)
+    WaveEquation(β, grid)
 
-Returns a wave equation with damping beta, on grid.
+Returns a wave equation with damping β, on grid.
 """
 function WaveEquation(c, grid)
     T = typeof(grid.Lx)
@@ -109,8 +109,8 @@ end
 Calculate the nonlinear term for the 1D wave equation.
 """
 function calcN!(N, sol, t, clock, vars, params, grid)
-    @. N[:, 1] = - params.beta / 2 * (sol[:, 1] + sol[:, 2])
-    @. N[:, 2] = - params.beta / 2 * (sol[:, 1] + sol[:, 2])
+    @. N[:, 1] = - params.β / 2 * (sol[:, 1] + sol[:, 2])
+    @. N[:, 2] = - params.β / 2 * (sol[:, 1] + sol[:, 2])
     return nothing
 end
 
