@@ -30,8 +30,6 @@ function makeplot(problem)
     return p
 end
 
-makeplot(problem)
-
 # ## Run, and animate the results
 
 anim = @animate for i = 1:51

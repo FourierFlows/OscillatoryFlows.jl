@@ -3,6 +3,7 @@ push!(LOAD_PATH,"../src/")
 using
     Documenter,
     Literate,
+    Plots, # to not capture precompilation output
     OscillatoryFlows,
     OscillatoryFlows.OneDWaveEquation
     
