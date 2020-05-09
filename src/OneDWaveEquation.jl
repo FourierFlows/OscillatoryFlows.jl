@@ -134,7 +134,7 @@ function updatevars!(problem)
     # solution for mean ξ: ξ̂(k=0, t) = ( ∫ξ₀ dx + ∫u₀ dx * (1-e⁻ᵝᵗ)/β ) * nₓ/Lₓ
     @inbounds vars.ξh[1] = ( vars.integral_contraints.∫ξ + vars.integral_contraints.∫u * ( β==0 ? t : (1-exp(-β*t))/β ) ) * grid.nx/grid.Lx
     
-    # solution for mean u: ξ̂(k=0, t) = ∫u₀ dx * e⁻ᵝᵗ * nₓ/Lₓ
+    # solution for mean u: û(k=0, t) = ∫u₀ dx * e⁻ᵝᵗ * nₓ/Lₓ
     @inbounds vars.uh[1] = vars.integral_contraints.∫u * exp(-β*t) * grid.nx/grid.Lx
 
     ldiv!(vars.ξ, grid.rfftplan, vars.ξh)
