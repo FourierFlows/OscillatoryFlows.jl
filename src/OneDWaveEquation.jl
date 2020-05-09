@@ -123,7 +123,7 @@ end
 """
     updatevars!(prob)
 
-Update `prob.vars` in the one-dimensional wave `prob`lem
+Update `problem.vars` in the one-dimensional wave `problem`
 """
 function updatevars!(problem) 
     vars, params, grid, sol = problem.vars, problem.params, problem.grid, problem.sol
