@@ -130,8 +130,11 @@ function updatevars!(problem)
     β, t = params.β, problem.clock.t
     @. vars.uh = (sol[:, 2] + sol[:, 1]) / 2
     @. vars.ξh = (sol[:, 2] - sol[:, 1]) * im / (2 * σ(params.c, grid.kr))
-
+    
+    # solution for mean ξ: ξ̂(k=0, t) = ( ∫ξ₀ dx + ∫u₀ dx * (1-e⁻ᵝᵗ)/β ) * nₓ/Lₓ
     @inbounds vars.ξh[1] = ( vars.integral_contraints.∫ξ + vars.integral_contraints.∫u * ( β==0 ? t : (1-exp(-β*t))/β ) ) * grid.nx/grid.Lx
+    
+    # solution for mean u: ξ̂(k=0, t) = ∫u₀ dx * e⁻ᵝᵗ * nₓ/Lₓ
     @inbounds vars.uh[1] = vars.integral_contraints.∫u * exp(-β*t) * grid.nx/grid.Lx
 
     ldiv!(vars.ξ, grid.rfftplan, vars.ξh)
@@ -151,6 +154,7 @@ function set_u!(prob, u)
 
     # Set the velocity field
     prob.vars.u .= u
+    # Save the value of ∫u dx in prob.vars.integral_contraints.∫u
     prob.vars.integral_contraints.∫u = sum(u)*prob.grid.Lx/prob.grid.nx
     mul!(prob.vars.uh, prob.grid.rfftplan, prob.vars.u)
 
@@ -172,6 +176,7 @@ function set_ξ!(prob, ξ)
 
     # Set the velocity field
     prob.vars.ξ .= ξ
+    # Save the value of ∫ξ dx in prob.vars.integral_contraints.∫ξ
     prob.vars.integral_contraints.∫ξ = sum(ξ)*prob.grid.Lx/prob.grid.nx
     mul!(prob.vars.ξh, prob.grid.rfftplan, prob.vars.ξ)
 
