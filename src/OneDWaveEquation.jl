@@ -17,7 +17,7 @@ In terms of these 'wave functions', the Fourier transform of the wave equation b
 
 Note that 
 
-    `` û = (ψ̂ + χ̂) / 2``
+    `` û =   (ψ̂ + χ̂) / 2``
     `` ξ̂ = i (ψ̂ - χ̂) / 2 σ``
 """
 module OneDWaveEquation
@@ -85,12 +85,17 @@ function WaveEquation(c, grid)
     return FourierFlows.Equation(L, calcN!, grid)
 end
 
-struct Vars{A, B, A2} <: AbstractVars
-          ξ :: A
-          u :: A
-         ξh :: B
-         uh :: B
-  ξ0u0_mean :: A2
+struct Vars{A, B, S} <: AbstractVars
+                    ξ :: A
+                    u :: A
+                   ξh :: B
+                   uh :: B
+  integral_contraints :: S
+end
+
+mutable struct IntegralConstraints{T} <: AbstractVars
+    ∫ξ :: T
+    ∫u :: T
 end
 
 """
@@ -101,8 +106,7 @@ Returns the vars for a one-dimensional wave equation problem problem on `grid`.
 function Vars(::Dev, grid::AbstractGrid{T}) where {Dev, T}
     @devzeros Dev T grid.nx ξ u
     @devzeros Dev Complex{T} grid.nkr ξh uh
-    @devzeros Dev Complex{T} 2 ξ0u0_mean
-    return Vars(ξ, u, ξh, uh, ξ0u0_mean)
+    return Vars(ξ, u, ξh, uh, IntegralConstraints{T}(0, 0))
 end
 
 """
@@ -127,8 +131,8 @@ function updatevars!(problem)
     @. vars.uh = (sol[:, 2] + sol[:, 1]) / 2
     @. vars.ξh = (sol[:, 2] - sol[:, 1]) * im / (2 * σ(params.c, grid.kr))
 
-    @inbounds vars.ξh[1] = ( vars.ξ0u0_mean[1] + vars.ξ0u0_mean[2] * ( β==0 ? t : (1-exp(-β*t))/β ) )*grid.nx
-    @inbounds vars.uh[1] = ( vars.ξ0u0_mean[2] * exp(-β*t) )*grid.nx
+    @inbounds vars.ξh[1] = ( vars.integral_contraints.∫ξ + vars.integral_contraints.∫u * ( β==0 ? t : (1-exp(-β*t))/β ) ) * grid.nx/grid.Lx
+    @inbounds vars.uh[1] = vars.integral_contraints.∫u * exp(-β*t) * grid.nx/grid.Lx
 
     ldiv!(vars.ξ, grid.rfftplan, vars.ξh)
     ldiv!(vars.u, grid.rfftplan, vars.uh)
@@ -147,7 +151,7 @@ function set_u!(prob, u)
 
     # Set the velocity field
     prob.vars.u .= u
-    prob.vars.ξ0u0_mean[2] = sum(u)/prob.grid.nx
+    prob.vars.integral_contraints.∫u = sum(u)*prob.grid.Lx/prob.grid.nx
     mul!(prob.vars.uh, prob.grid.rfftplan, prob.vars.u)
 
     # Set velocity u, and restore displacement ξ
@@ -168,7 +172,7 @@ function set_ξ!(prob, ξ)
 
     # Set the velocity field
     prob.vars.ξ .= ξ
-    prob.vars.ξ0u0_mean[1] = sum(ξ)/prob.grid.nx
+    prob.vars.integral_contraints.∫ξ = sum(ξ)*prob.grid.Lx/prob.grid.nx
     mul!(prob.vars.ξh, prob.grid.rfftplan, prob.vars.ξ)
 
     # Set velocity u, and restore displacement ξ
