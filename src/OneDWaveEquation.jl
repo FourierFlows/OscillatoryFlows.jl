@@ -121,9 +121,9 @@ function calcN!(N, sol, t, clock, vars, params, grid)
 end
 
 """
-    updatevars!(prob)
+    updatevars!(problem)
 
-Update `problem.vars` in the one-dimensional wave `problem`
+Update `problem.vars` in the one-dimensional wave `problem`.
 """
 function updatevars!(problem) 
     vars, params, grid, sol = problem.vars, problem.params, problem.grid, problem.sol
