@@ -38,7 +38,7 @@ Timer(t -> println(" "), 0, interval=240)
 format = Documenter.HTML(
   collapselevel = 2,
      prettyurls = get(ENV, "CI", nothing) == "true",
-      canonical = "https://fourierflows.github.io/OscillatoryFlows.jl/dev/"
+      canonical = "https://fourierflows.github.io/OscillatoryFlowsDocumentation/dev/"
 )
 
 
@@ -64,7 +64,9 @@ makedocs(  modules = [OscillatoryFlows],
                         ]
         )
 
-deploydocs(        repo = "github.com/FourierFlows/OscillatoryFlows.jl.git",
-               versions = ["stable" => "v^", "v#.#.#"],
-           push_preview = true,
-           )
+withenv("GITHUB_REPOSITORY" => "FourierFlows/OscillatoryFlowsDocumentation") do
+  deploydocs(       repo = "github.com/FourierFlows/OscillatoryFlowsDocumentation.git",
+                versions = ["stable" => "v^", "v#.#.#"],
+            push_preview = true
+            )
+end
